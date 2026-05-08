@@ -7,23 +7,23 @@
 
 .lyra-wallpaper {
   background-image:
-    radial-gradient(circle at 15% 25%, rgba(96, 165, 250, 0.25), transparent 40%),
-    radial-gradient(circle at 80% 15%, rgba(167, 139, 250, 0.2), transparent 35%),
-    radial-gradient(circle at 70% 75%, rgba(45, 212, 191, 0.2), transparent 30%),
-    url('/wallpaper.jpg');
+    radial-gradient(circle at 15% 25%, rgba(56, 189, 248, 0.22), transparent 40%),
+    radial-gradient(circle at 80% 15%, rgba(167, 139, 250, 0.18), transparent 35%),
+    radial-gradient(circle at 70% 75%, rgba(16, 185, 129, 0.15), transparent 30%),
+    url('/wallpaper.png');
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  filter: saturate(1.08);
-  transform: scale(1.03);
+  filter: saturate(1.12) contrast(1.06);
+  transform: scale(1.02);
 }
 
 .lyra-overlay {
-  background: linear-gradient(160deg, rgba(3, 7, 18, 0.62), rgba(2, 6, 23, 0.38));
+  background: linear-gradient(145deg, rgba(2, 6, 23, 0.52), rgba(2, 6, 23, 0.24));
 }
 
 .lyra-grid-pattern {
-  opacity: 0.05;
+  opacity: 0.03;
   background-image:
     repeating-linear-gradient(
       0deg,
@@ -42,47 +42,61 @@
 }
 
 .lyra-topbar {
-  background: linear-gradient(140deg, rgba(15, 23, 42, 0.75), rgba(15, 23, 42, 0.45));
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  backdrop-filter: blur(16px);
-  box-shadow: 0 8px 26px rgba(2, 6, 23, 0.35);
+  background: linear-gradient(160deg, rgba(15, 23, 42, 0.52), rgba(15, 23, 42, 0.34));
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(22px);
+  box-shadow: 0 8px 34px rgba(2, 6, 23, 0.36);
 }
 
 .lyra-widget-panel {
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 14px;
-  background: linear-gradient(160deg, rgba(15, 23, 42, 0.58), rgba(15, 23, 42, 0.35));
-  backdrop-filter: blur(18px);
-  box-shadow: 0 20px 35px rgba(2, 6, 23, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 18px;
+  background: linear-gradient(160deg, rgba(15, 23, 42, 0.52), rgba(15, 23, 42, 0.3));
+  backdrop-filter: blur(24px);
+  box-shadow: 0 20px 35px rgba(2, 6, 23, 0.28);
 }
 
 .lyra-hero {
-  margin-bottom: 12%;
+  margin-bottom: 0;
 }
 
 .lyra-dock {
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 18px;
-  background: linear-gradient(145deg, rgba(15, 23, 42, 0.65), rgba(30, 41, 59, 0.45));
-  backdrop-filter: blur(18px);
-  box-shadow: 0 16px 30px rgba(2, 6, 23, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 22px;
+  background: linear-gradient(145deg, rgba(15, 23, 42, 0.54), rgba(30, 41, 59, 0.34));
+  backdrop-filter: blur(22px);
+  box-shadow: 0 20px 34px rgba(2, 6, 23, 0.38);
 }
 
 .lyra-dock-item {
   color: rgba(248, 250, 252, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 12px;
-  padding: 8px 14px;
-  font-size: 13px;
-  letter-spacing: 0.01em;
-  background: linear-gradient(160deg, rgba(148, 163, 184, 0.12), rgba(148, 163, 184, 0.04));
-  transition: transform 0.18s ease, background-color 0.18s ease, border-color 0.18s ease;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 14px;
+  min-width: 74px;
+  padding: 7px 12px;
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  background: linear-gradient(160deg, rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.05));
+  transition: transform 0.18s ease, background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .lyra-dock-item:hover {
-  transform: translateY(-2px);
-  border-color: rgba(255, 255, 255, 0.32);
-  background: linear-gradient(160deg, rgba(148, 163, 184, 0.2), rgba(148, 163, 184, 0.08));
+  transform: translateY(-3px) scale(1.03);
+  border-color: rgba(255, 255, 255, 0.38);
+  background: linear-gradient(160deg, rgba(148, 163, 184, 0.24), rgba(148, 163, 184, 0.08));
+  box-shadow: 0 10px 16px rgba(15, 23, 42, 0.35);
+}
+
+.lyra-dock-dot {
+  width: 26px;
+  height: 26px;
+  border-radius: 10px;
+  background: linear-gradient(160deg, rgba(56, 189, 248, 0.85), rgba(59, 130, 246, 0.75));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 6px 14px rgba(37, 99, 235, 0.35);
 }
 
 .lyra-control-btn {
@@ -123,16 +137,17 @@
 }
 
 .lyra-menu-btn {
-  padding: 3px 8px;
+  padding: 4px 9px;
+  font-size: 13px;
 }
 
 .lyra-icon-btn {
-  padding: 5px;
+  padding: 6px;
 }
 
 .lyra-menu-btn:hover,
 .lyra-icon-btn:hover {
-  background-color: rgba(148, 163, 184, 0.2);
+  background-color: rgba(148, 163, 184, 0.24);
   color: #fff;
 }
 
