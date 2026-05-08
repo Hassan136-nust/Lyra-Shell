@@ -2,32 +2,75 @@
 
 A modern, minimal desktop shell built with Tauri v2, React, and Tailwind CSS.
 
-## 🚀 Get Started
+## 🎯 Phase 1 - Core UI
 
-**The project is in the `lyra/` folder.**
+**Status:** ✅ In Development
+
+**Features:**
+- Fullscreen borderless desktop shell window
+- macOS-style top bar with live clock
+- Clean, minimal dark theme
+- Smooth animations with Framer Motion
+
+## 🚀 Quick Start
 
 ```bash
-cd lyra
+# Install dependencies
+npm install
+
+# Run development server
+npm run tauri dev
 ```
 
-Then follow the instructions in **[lyra/START_HERE.md](lyra/START_HERE.md)**
+**First run takes 2-5 minutes (Rust compilation)**
+
+**⚠️ Windows users:** Install Visual Studio Build Tools first! See [FIX_BUILD_TOOLS.md](FIX_BUILD_TOOLS.md)
 
 ## 📖 Documentation
 
-All documentation is in the `lyra/` folder:
+- **[START_HERE.md](START_HERE.md)** - 🚀 Begin here!
+- **[FIX_BUILD_TOOLS.md](FIX_BUILD_TOOLS.md)** - Visual Studio setup
+- **[ISSUES_FIXED.md](ISSUES_FIXED.md)** - Troubleshooting
+- **[WALLPAPER_SETUP.md](WALLPAPER_SETUP.md)** - Custom wallpaper guide
 
-- **[lyra/START_HERE.md](lyra/START_HERE.md)** - Quick start guide
-- **[lyra/README.md](lyra/README.md)** - Project overview
-- **[lyra/FIX_BUILD_TOOLS.md](lyra/FIX_BUILD_TOOLS.md)** - Windows setup
-- **[lyra/WALLPAPER_SETUP.md](lyra/WALLPAPER_SETUP.md)** - Wallpaper guide
+## 🛠️ Tech Stack
 
-## 📋 Planning Documents
+- **Tauri v2** - Native app framework
+- **React 19** - UI library
+- **Vite 7** - Build tool & dev server
+- **Tailwind CSS 4** - Styling
+- **Framer Motion 12** - Animations
 
-- **[PROJECT_REQUIREMENTS.md](PROJECT_REQUIREMENTS.md)** - Full project requirements
-- **[PHASE_1_SETUP.md](PHASE_1_SETUP.md)** - Phase 1 setup guide
-- **[PHASE_1_FOLDER_STRUCTURE.md](PHASE_1_FOLDER_STRUCTURE.md)** - Folder structure
-- **[QUICK_START.md](QUICK_START.md)** - Quick reference
+## 📸 Screenshots
 
----
+*Coming soon*
 
-**Start here:** `cd lyra` → Read `START_HERE.md`
+## 🗺️ Roadmap
+
+### Phase 1 (Current)
+- [x] Fullscreen window setup
+- [x] Top bar with live clock
+- [x] Basic UI layout
+- [x] Custom wallpaper support
+
+### Phase 2 (Planned)
+- [ ] Bottom dock
+- [ ] App launcher (Spotlight-style)
+- [ ] Window management
+
+### Phase 3 (Future)
+- [ ] System integration
+- [ ] Settings panel
+- [ ] Themes & customization
+
+## 🤝 Contributing
+
+This is a personal learning project. Feel free to fork and experiment!
+
+## 📝 License
+
+MIT
+
+## 🙏 Acknowledgments
+
+Inspired by macOS and Arch Linux aesthetics.
