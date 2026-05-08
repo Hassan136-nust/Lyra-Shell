@@ -1,11 +1,141 @@
 /* App-specific styles */
 
-/* Smooth transitions for interactive elements */
-button {
-  transition: all 0.2s ease-in-out;
+.lyra-desktop-shell {
+  color: #f8fafc;
+  background: #0a0f1c;
 }
 
-/* Custom scrollbar (for future use) */
+.lyra-wallpaper {
+  background-image:
+    radial-gradient(circle at 15% 25%, rgba(96, 165, 250, 0.25), transparent 40%),
+    radial-gradient(circle at 80% 15%, rgba(167, 139, 250, 0.2), transparent 35%),
+    radial-gradient(circle at 70% 75%, rgba(45, 212, 191, 0.2), transparent 30%),
+    url('/wallpaper.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  filter: saturate(1.08);
+  transform: scale(1.03);
+}
+
+.lyra-overlay {
+  background: linear-gradient(160deg, rgba(3, 7, 18, 0.62), rgba(2, 6, 23, 0.38));
+}
+
+.lyra-grid-pattern {
+  opacity: 0.05;
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      rgba(255, 255, 255, 0.6) 0px,
+      rgba(255, 255, 255, 0.6) 1px,
+      transparent 1px,
+      transparent 105px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.6) 0px,
+      rgba(255, 255, 255, 0.6) 1px,
+      transparent 1px,
+      transparent 105px
+    );
+}
+
+.lyra-topbar {
+  background: linear-gradient(140deg, rgba(15, 23, 42, 0.75), rgba(15, 23, 42, 0.45));
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 8px 26px rgba(2, 6, 23, 0.35);
+}
+
+.lyra-widget-panel {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 14px;
+  background: linear-gradient(160deg, rgba(15, 23, 42, 0.58), rgba(15, 23, 42, 0.35));
+  backdrop-filter: blur(18px);
+  box-shadow: 0 20px 35px rgba(2, 6, 23, 0.3);
+}
+
+.lyra-hero {
+  margin-bottom: 12%;
+}
+
+.lyra-dock {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(15, 23, 42, 0.65), rgba(30, 41, 59, 0.45));
+  backdrop-filter: blur(18px);
+  box-shadow: 0 16px 30px rgba(2, 6, 23, 0.45);
+}
+
+.lyra-dock-item {
+  color: rgba(248, 250, 252, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  padding: 8px 14px;
+  font-size: 13px;
+  letter-spacing: 0.01em;
+  background: linear-gradient(160deg, rgba(148, 163, 184, 0.12), rgba(148, 163, 184, 0.04));
+  transition: transform 0.18s ease, background-color 0.18s ease, border-color 0.18s ease;
+}
+
+.lyra-dock-item:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.32);
+  background: linear-gradient(160deg, rgba(148, 163, 184, 0.2), rgba(148, 163, 184, 0.08));
+}
+
+.lyra-control-btn {
+  color: rgba(248, 250, 252, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 13px;
+  background: rgba(30, 41, 59, 0.45);
+  transition: background-color 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+}
+
+.lyra-control-btn:hover:enabled {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.34);
+  background: rgba(51, 65, 85, 0.6);
+}
+
+.lyra-control-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.lyra-danger-btn {
+  background: rgba(127, 29, 29, 0.55);
+  border-color: rgba(252, 165, 165, 0.35);
+}
+
+.lyra-danger-btn:hover:enabled {
+  background: rgba(153, 27, 27, 0.75);
+  border-color: rgba(252, 165, 165, 0.55);
+}
+
+.lyra-menu-btn,
+.lyra-icon-btn {
+  border-radius: 8px;
+  transition: background-color 0.18s ease, color 0.18s ease;
+}
+
+.lyra-menu-btn {
+  padding: 3px 8px;
+}
+
+.lyra-icon-btn {
+  padding: 5px;
+}
+
+.lyra-menu-btn:hover,
+.lyra-icon-btn:hover {
+  background-color: rgba(148, 163, 184, 0.2);
+  color: #fff;
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -16,10 +146,10 @@ button {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.24);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.35);
 }
