@@ -139,9 +139,10 @@ lyra/
 
 ## 📚 Documentation
 
-- **[SETUP_COMPLETE.md](SETUP_COMPLETE.md)** - Full setup details
-- **[COMMANDS_EXECUTED.md](COMMANDS_EXECUTED.md)** - Commands that were run
-- **[QUICK_START.md](../QUICK_START.md)** - Troubleshooting guide
+- **[FIX_BUILD_TOOLS.md](FIX_BUILD_TOOLS.md)** - Visual Studio Build Tools setup
+- **[ISSUES_FIXED.md](ISSUES_FIXED.md)** - Troubleshooting guide
+- **[WALLPAPER_SETUP.md](WALLPAPER_SETUP.md)** - How to add custom wallpaper
+- **[README.md](README.md)** - Project overview
 
 ---
 

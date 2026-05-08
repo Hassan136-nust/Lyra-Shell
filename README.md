@@ -2,72 +2,32 @@
 
 A modern, minimal desktop shell built with Tauri v2, React, and Tailwind CSS.
 
-## 🎯 Phase 1 - Core UI
+## 🚀 Get Started
 
-**Status:** ✅ In Development
-
-**Features:**
-- Fullscreen borderless desktop shell window
-- macOS-style top bar with live clock
-- Clean, minimal dark theme
-- Smooth animations with Framer Motion
-
-## 🚀 Quick Start
+**The project is in the `lyra/` folder.**
 
 ```bash
-# Install dependencies
-npm install
-
-# Run development server
-npm run tauri dev
+cd lyra
 ```
 
-**First run takes 2-5 minutes (Rust compilation)**
+Then follow the instructions in **[lyra/START_HERE.md](lyra/START_HERE.md)**
 
 ## 📖 Documentation
 
-- **[Quick Start Guide](QUICK_START.md)** - Get up and running
-- **[Setup Instructions](PHASE_1_SETUP.md)** - Detailed setup
-- **[Folder Structure](PHASE_1_FOLDER_STRUCTURE.md)** - Project organization
-- **[Full Requirements](PROJECT_REQUIREMENTS.md)** - Complete project plan
+All documentation is in the `lyra/` folder:
 
-## 🛠️ Tech Stack
+- **[lyra/START_HERE.md](lyra/START_HERE.md)** - Quick start guide
+- **[lyra/README.md](lyra/README.md)** - Project overview
+- **[lyra/FIX_BUILD_TOOLS.md](lyra/FIX_BUILD_TOOLS.md)** - Windows setup
+- **[lyra/WALLPAPER_SETUP.md](lyra/WALLPAPER_SETUP.md)** - Wallpaper guide
 
-- **Tauri v2** - Native app framework
-- **React 18** - UI library
-- **Vite** - Build tool & dev server
-- **Tailwind CSS** - Styling
-- **Framer Motion** - Animations
+## 📋 Planning Documents
 
-## 📸 Screenshots
+- **[PROJECT_REQUIREMENTS.md](PROJECT_REQUIREMENTS.md)** - Full project requirements
+- **[PHASE_1_SETUP.md](PHASE_1_SETUP.md)** - Phase 1 setup guide
+- **[PHASE_1_FOLDER_STRUCTURE.md](PHASE_1_FOLDER_STRUCTURE.md)** - Folder structure
+- **[QUICK_START.md](QUICK_START.md)** - Quick reference
 
-*Coming soon*
+---
 
-## 🗺️ Roadmap
-
-### Phase 1 (Current)
-- [x] Fullscreen window setup
-- [x] Top bar with live clock
-- [x] Basic UI layout
-
-### Phase 2 (Planned)
-- [ ] Bottom dock
-- [ ] App launcher (Spotlight-style)
-- [ ] Window management
-
-### Phase 3 (Future)
-- [ ] System integration
-- [ ] Settings panel
-- [ ] Themes & customization
-
-## 🤝 Contributing
-
-This is a personal learning project. Feel free to fork and experiment!
-
-## 📝 License
-
-MIT
-
-## 🙏 Acknowledgments
-
-Inspired by macOS and Arch Linux aesthetics.
+**Start here:** `cd lyra` → Read `START_HERE.md`
