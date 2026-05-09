@@ -379,6 +379,30 @@
   color: var(--ctp-text);
 }
 
+.tray-item.tray-online {
+  color: var(--ctp-green);
+  background: rgba(166, 227, 161, 0.12);
+  border: 1px solid rgba(166, 227, 161, 0.25);
+}
+
+.tray-item.tray-online:hover {
+  background: rgba(166, 227, 161, 0.2);
+}
+
+.tray-net-speed {
+  gap: 8px;
+  color: var(--ctp-subtext0);
+  font-size: 10px;
+}
+
+.tray-net-speed span:first-child {
+  color: var(--ctp-blue);
+}
+
+.tray-net-speed span:last-child {
+  color: var(--ctp-peach);
+}
+
 .tray-clock {
   color: var(--ctp-text);
   font-weight: 500;

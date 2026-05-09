@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { motion, useSpring, AnimatePresence } from 'framer-motion';
+import { motion, useSpring, useMotionValue, useTransform, AnimatePresence } from 'framer-motion';
 import { useAppContext } from '../contexts/AppContext';
 
 /* ── SVG Icon Generator ───────────────────────────────────────── */
@@ -187,12 +187,19 @@ const pinnedApps = [
 ];
 
 /* ── Single Dock Icon with magnification ──────────────────────── */
-const DockIcon = ({ label, visual, isRunning, isActive, onClick, onContextMenu }) => {
+const DockIcon = ({ label, visual, isRunning, isActive, onClick, onContextMenu, mouseX }) => {
   const ref = useRef(null);
-  const [isHovered, setIsHovered] = useState(false);
+  const distance = useTransform(mouseX, (value) => {
+    const bounds = ref.current?.getBoundingClientRect();
+    if (!bounds) return 9999;
+    const centerX = bounds.left + bounds.width / 2;
+    return value - centerX;
+  });
+  const sizeTransform = useTransform(distance, [-180, 0, 180], [40, 62, 40]);
+  const yTransform = useTransform(distance, [-180, 0, 180], [0, -10, 0]);
 
-  const size = useSpring(isHovered ? 56 : 40, { mass: 0.1, stiffness: 170, damping: 14 });
-  const y = useSpring(isHovered ? -8 : 0, { mass: 0.1, stiffness: 170, damping: 14 });
+  const size = useSpring(sizeTransform, { mass: 0.15, stiffness: 180, damping: 18 });
+  const y = useSpring(yTransform, { mass: 0.15, stiffness: 180, damping: 18 });
 
   return (
     <motion.div
@@ -201,8 +208,6 @@ const DockIcon = ({ label, visual, isRunning, isActive, onClick, onContextMenu }
       style={{ width: size, height: size, y }}
       onClick={onClick}
       onContextMenu={onContextMenu}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
     >
       {/* Tooltip */}
       <motion.div className="dock-tooltip">
@@ -249,6 +254,7 @@ const DockIcon = ({ label, visual, isRunning, isActive, onClick, onContextMenu }
 const Dock = () => {
   const { runningApps, activeWindow, focusWindow, closeWindow, runAction } = useAppContext();
   const [contextMenu, setContextMenu] = useState(null);
+  const mouseX = useMotionValue(9999);
 
   // Filter out duplicates and get unique running apps by process name
   const uniqueRunning = [];
@@ -275,13 +281,15 @@ const Dock = () => {
 
   return (
     <>
-      <motion.div
-        className="dock-container"
-        initial={{ y: 80, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.5, delay: 0.2, ease: 'easeOut' }}
-      >
-        <div className="dock-bar">
+      <div className="dock-container">
+        <motion.div
+          className="dock-bar"
+          initial={{ y: 80, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.5, delay: 0.2, ease: 'easeOut' }}
+          onMouseMove={(e) => mouseX.set(e.clientX)}
+          onMouseLeave={() => mouseX.set(9999)}
+        >
           {/* Pinned Apps */}
           {pinnedApps.map((app) => (
             <DockIcon
@@ -291,6 +299,7 @@ const Dock = () => {
               isRunning={false}
               isActive={false}
               onClick={() => runAction(app.action)}
+              mouseX={mouseX}
             />
           ))}
 
@@ -311,6 +320,7 @@ const Dock = () => {
                 isActive={isActive}
                 onClick={() => focusWindow(app.hwnd)}
                 onContextMenu={(e) => handleContextMenu(e, app)}
+                mouseX={mouseX}
               />
             );
           })}
@@ -334,9 +344,10 @@ const Dock = () => {
             isRunning={false}
             isActive={false}
             onClick={() => {}}
+            mouseX={mouseX}
           />
-        </div>
-      </motion.div>
+        </motion.div>
+      </div>
 
       {/* Context Menu */}
       <AnimatePresence>

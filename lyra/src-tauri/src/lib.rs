@@ -1,6 +1,6 @@
 use std::process::Command;
 use serde::Serialize;
-use sysinfo::System;
+use sysinfo::{Networks, System};
 use std::ffi::c_void;
 use std::collections::HashMap;
 
@@ -33,6 +33,12 @@ pub struct SystemInfoData {
     pub memory_used_gb: f32,
     pub memory_total_gb: f32,
     pub memory_percent: f32,
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub struct NetworkCounters {
+    pub rx_bytes: u64,
+    pub tx_bytes: u64,
 }
 
 // ── Win32 helpers ────────────────────────────────────────────────
@@ -425,6 +431,33 @@ fn wifi_status() -> Result<serde_json::Value, String> {
     }))
 }
 
+#[tauri::command]
+fn get_network_counters() -> Result<NetworkCounters, String> {
+    let mut networks = Networks::new_with_refreshed_list();
+    networks.refresh();
+
+    let mut rx_bytes: u64 = 0;
+    let mut tx_bytes: u64 = 0;
+
+    for (name, data) in &networks {
+        let lname = name.to_lowercase();
+        if lname.contains("loopback")
+            || lname.contains("vethernet")
+            || lname.contains("virtual")
+            || lname.contains("bluetooth")
+            || lname.contains("isatap")
+            || lname.contains("teredo")
+        {
+            continue;
+        }
+
+        rx_bytes = rx_bytes.saturating_add(data.total_received());
+        tx_bytes = tx_bytes.saturating_add(data.total_transmitted());
+    }
+
+    Ok(NetworkCounters { rx_bytes, tx_bytes })
+}
+
 // ── Audio Commands (Real Windows Data) ──────────────────────────
 
 #[cfg(target_os = "windows")]
@@ -556,6 +589,7 @@ pub fn run() {
             list_wifi_networks,
             connect_wifi,
             wifi_status,
+            get_network_counters,
             get_volume,
             set_volume,
             get_mute,

@@ -1,27 +1,13 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppContext } from '../contexts/AppContext';
+import RealtimeTray from './RealtimeTray';
 import logo from '../../public/logo.png';
 
 /* ── Inline SVG Icons ─────────────────────────────────────────── */
 const ArchIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
     <path d="M12 2L1 22h6l5-10 5 10h6L12 2zm0 5.5L15.5 16h-7L12 7.5z"/>
-  </svg>
-);
-
-const WifiIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M5 12.55a11 11 0 0 1 14 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/>
-    <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill="currentColor"/>
-  </svg>
-);
-
-const VolumeIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor"/>
-    <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
   </svg>
 );
 
@@ -110,44 +96,7 @@ const TopBar = () => {
   const [batteryLevel, setBatteryLevel] = useState(100);
   const [isCharging, setIsCharging] = useState(false);
   const [showPowerMenu, setShowPowerMenu] = useState(false);
-  const [showWifi, setShowWifi] = useState(false);
-  const [showVolume, setShowVolume] = useState(false);
-  const [volume, setVolume] = useState(0);
-  const [mute, setMute] = useState(false);
-  const [isSlidingVolume, setIsSlidingVolume] = useState(false);
-  const [networks, setNetworks] = useState([]);
-  const [wifiStatus, setWifiStatus] = useState({ connected: false, ssid: '', signal: 0 });
   const powerMenuRef = useRef(null);
-  const wifiRef = useRef(null);
-  const volumeRef = useRef(null);
-
-  const refreshWifi = useCallback(async () => {
-    try {
-      const [status, list] = await Promise.all([
-        invoke('wifi_status'),
-        invoke('list_wifi_networks'),
-      ]);
-      setWifiStatus(status);
-      setNetworks(Array.isArray(list) ? list : []);
-    } catch (e) {
-      console.error('Failed to refresh WiFi data:', e);
-    }
-  }, []);
-
-  const refreshAudio = useCallback(async () => {
-    try {
-      const [currentVolume, muted] = await Promise.all([
-        invoke('get_volume'),
-        invoke('get_mute'),
-      ]);
-      if (!isSlidingVolume) {
-        setVolume(Number(currentVolume ?? 0));
-      }
-      setMute(Boolean(muted));
-    } catch (e) {
-      console.error('Failed to refresh audio data:', e);
-    }
-  }, [isSlidingVolume]);
 
   // Clock
   useEffect(() => {
@@ -174,26 +123,10 @@ const TopBar = () => {
   useEffect(() => {
     const handler = (e) => {
       if (powerMenuRef.current && !powerMenuRef.current.contains(e.target)) setShowPowerMenu(false);
-      if (wifiRef.current && !wifiRef.current.contains(e.target)) setShowWifi(false);
-      if (volumeRef.current && !volumeRef.current.contains(e.target)) setShowVolume(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
-
-  useEffect(() => {
-    if (!showWifi) return;
-    refreshWifi();
-    const id = setInterval(refreshWifi, 6000);
-    return () => clearInterval(id);
-  }, [showWifi, refreshWifi]);
-
-  useEffect(() => {
-    if (!showVolume) return;
-    refreshAudio();
-    const id = setInterval(refreshAudio, 1000);
-    return () => clearInterval(id);
-  }, [showVolume, refreshAudio]);
 
   const formatDate = (d) => d.toLocaleDateString('en-US', { weekday: 'short', day: '2-digit', month: 'short' });
   const formatTime = (d) => d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
@@ -249,123 +182,7 @@ const TopBar = () => {
       {/* ── Right: System Tray ── */}
       <div className="topbar-section topbar-right">
 
-        {/* Network */}
-        <div className="tray-item tray-interactive" tabIndex={0} style={{ position: 'relative' }} ref={wifiRef}>
-          <button className="tray-btn" style={{background:'none',border:'none',padding:0}} onClick={() => { setShowWifi((v) => !v); setShowVolume(false); }}>
-            <WifiIcon />
-            <span>WiFi</span>
-          </button>
-          <AnimatePresence>
-            {showWifi && (
-              <motion.div
-                className="popover popover-wifi"
-                initial={{ opacity: 0, y: 8, scale: 0.98 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 8, scale: 0.98 }}
-                transition={{ duration: 0.18 }}
-                style={{ position: 'absolute', top: 34, right: 0, width: 380, zIndex: 300 }}
-              >
-                <div className="popover-header popover-header-wifi">
-                  <WifiIcon />
-                  <span>WiFi Networks</span>
-                  <span className="popover-powered">powered by <span>Arch</span></span>
-                </div>
-                {wifiStatus?.connected && (
-                  <div className="wifi-current">
-                    <span className="wifi-current-label">Connected</span>
-                    <span className="wifi-current-name">{wifiStatus.ssid || 'Unknown network'}</span>
-                  </div>
-                )}
-                <div className="wifi-list">
-                  {networks.length === 0 && <div className="popover-empty">No networks found</div>}
-                  {networks.map((net, idx) => (
-                    <div
-                      key={`${net.ssid}-${idx}`}
-                      className={`network${net.connected ? ' connected' : ''}`}
-                      style={{display:'flex',alignItems:'center',gap:10}}
-                      onClick={async () => {
-                        try {
-                          await invoke('connect_wifi', { ssid: net.ssid });
-                          setTimeout(() => refreshWifi(), 1200);
-                        } catch (e) {
-                          console.error('Failed to connect WiFi:', e);
-                        }
-                      }}
-                    >
-                      <WifiIcon />
-                      <span className="network-name" style={{ fontWeight: net.connected ? 700 : 500, color: net.connected ? 'var(--ctp-blue)' : 'var(--ctp-text)' }}>{net.ssid}</span>
-                      <span className="network-signal">{Math.round((net.signal || 0) / 20)}/5</span>
-                      {net.connected && <span style={{ fontSize: 11, color: 'var(--ctp-green)', fontWeight: 600 }}>Connected</span>}
-                    </div>
-                  ))}
-                </div>
-                <div className="popover-footer">Manage Networks</div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        <div className="tray-sep" />
-
-
-        {/* Volume */}
-        <div className="tray-item tray-interactive" tabIndex={0} style={{ position: 'relative' }} ref={volumeRef}>
-          <button className="tray-btn" style={{background:'none',border:'none',padding:0}} onClick={() => { setShowVolume((v) => !v); setShowWifi(false); }}>
-            <VolumeIcon />
-            <span>{mute ? 'Muted' : `${volume}%`}</span>
-          </button>
-          <AnimatePresence>
-            {showVolume && (
-              <motion.div
-                className="popover popover-volume"
-                initial={{ opacity: 0, y: 8, scale: 0.98 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 8, scale: 0.98 }}
-                transition={{ duration: 0.18 }}
-                style={{ position: 'absolute', top: 34, right: 0, width: 350, zIndex: 300 }}
-              >
-                <div className="popover-header popover-header-volume">
-                  <VolumeIcon />
-                  <span>Volume blend</span>
-                  <span className="popover-powered">mac + arch</span>
-                </div>
-                <div className="volume-popover-body">
-                  <input
-                    className="volume-slider"
-                    type="range"
-                    min={0}
-                    max={100}
-                    value={volume}
-                    onMouseDown={() => setIsSlidingVolume(true)}
-                    onMouseUp={() => setIsSlidingVolume(false)}
-                    onTouchStart={() => setIsSlidingVolume(true)}
-                    onTouchEnd={() => setIsSlidingVolume(false)}
-                    onChange={e => {
-                      const v = Number(e.target.value);
-                      setVolume(v);
-                      invoke('set_volume', { value: v });
-                    }}
-                  />
-                  <div className="volume-actions">
-                    <button
-                      className="volume-mute-btn"
-                      onClick={async () => {
-                        const next = !mute;
-                        await invoke('set_mute', { value: next });
-                        setMute(next);
-                        refreshAudio();
-                      }}
-                    >
-                      {mute ? 'Unmute' : 'Mute'}
-                    </button>
-                    <span className="volume-value">{mute ? 'Muted' : `${volume}%`}</span>
-                  </div>
-                  <div className="volume-output">Output: <span>Speakers</span></div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+        <RealtimeTray />
 
         <div className="tray-sep" />
 

@@ -29,12 +29,42 @@ export const AppProvider = ({ children }) => {
   });
   const [activeWorkspace, setActiveWorkspace] = useState(1);
 
+  const sameWindow = (a, b) => {
+    if (!a && !b) return true;
+    if (!a || !b) return false;
+    return a.hwnd === b.hwnd && a.pid === b.pid && a.title === b.title && a.process_name === b.process_name;
+  };
+
+  const sameSystemInfo = (a, b) =>
+    a.cpu_usage === b.cpu_usage &&
+    a.memory_used_gb === b.memory_used_gb &&
+    a.memory_total_gb === b.memory_total_gb &&
+    a.memory_percent === b.memory_percent;
+
+  const sameRunningApps = (a, b) => {
+    if (!Array.isArray(a) || !Array.isArray(b)) return false;
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i += 1) {
+      if (
+        a[i].hwnd !== b[i].hwnd ||
+        a[i].pid !== b[i].pid ||
+        a[i].title !== b[i].title ||
+        a[i].process_name !== b[i].process_name
+      ) {
+        return false;
+      }
+    }
+    return true;
+  };
+
   // Fetch running windows every 2s
   useEffect(() => {
     let mounted = true;
     const poll = async () => {
       const result = await tauriInvoke('get_running_windows', {}, []);
-      if (mounted && result) setRunningApps(result);
+      if (mounted && Array.isArray(result)) {
+        setRunningApps((prev) => (sameRunningApps(prev, result) ? prev : result));
+      }
     };
     poll();
     const interval = setInterval(poll, 2000);
@@ -46,7 +76,9 @@ export const AppProvider = ({ children }) => {
     let mounted = true;
     const poll = async () => {
       const result = await tauriInvoke('get_active_window', {}, null);
-      if (mounted) setActiveWindow(result);
+      if (mounted) {
+        setActiveWindow((prev) => (sameWindow(prev, result) ? prev : result));
+      }
     };
     poll();
     const interval = setInterval(poll, 1000);
@@ -58,7 +90,9 @@ export const AppProvider = ({ children }) => {
     let mounted = true;
     const poll = async () => {
       const result = await tauriInvoke('get_system_info', {}, null);
-      if (mounted && result) setSystemInfo(result);
+      if (mounted && result) {
+        setSystemInfo((prev) => (sameSystemInfo(prev, result) ? prev : result));
+      }
     };
     poll();
     const interval = setInterval(poll, 5000);
