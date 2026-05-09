@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppContext } from '../contexts/AppContext';
+import logo from '../../public/logo.png';
 
 /* ── Inline SVG Icons ─────────────────────────────────────────── */
 const ArchIcon = () => (
@@ -108,7 +109,19 @@ const TopBar = () => {
   const [batteryLevel, setBatteryLevel] = useState(100);
   const [isCharging, setIsCharging] = useState(false);
   const [showPowerMenu, setShowPowerMenu] = useState(false);
+  const [showWifi, setShowWifi] = useState(false);
+  const [showVolume, setShowVolume] = useState(false);
+  const [volume, setVolume] = useState(72);
+  const [mute, setMute] = useState(false);
+  const [networks] = useState([
+    { ssid: 'ArchNet', signal: 5, connected: true },
+    { ssid: 'MacFusion', signal: 4 },
+    { ssid: 'CoffeeShop', signal: 3 },
+    { ssid: 'Hidden', signal: 2 },
+  ]);
   const powerMenuRef = useRef(null);
+  const wifiRef = useRef(null);
+  const volumeRef = useRef(null);
 
   // Clock
   useEffect(() => {
@@ -131,12 +144,12 @@ const TopBar = () => {
     }
   }, []);
 
-  // Close power menu on outside click
+  // Close popovers on outside click
   useEffect(() => {
     const handler = (e) => {
-      if (powerMenuRef.current && !powerMenuRef.current.contains(e.target)) {
-        setShowPowerMenu(false);
-      }
+      if (powerMenuRef.current && !powerMenuRef.current.contains(e.target)) setShowPowerMenu(false);
+      if (wifiRef.current && !wifiRef.current.contains(e.target)) setShowWifi(false);
+      if (volumeRef.current && !volumeRef.current.contains(e.target)) setShowVolume(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -165,9 +178,9 @@ const TopBar = () => {
     >
       {/* ── Left: Logo + Workspaces + Active Window ── */}
       <div className="topbar-section topbar-left">
-        {/* Arch Logo */}
+        {/* Project Logo */}
         <div className="topbar-logo">
-          <ArchIcon />
+          <img src={logo} alt="Lyra Logo" style={{ width: 20, height: 20, objectFit: 'contain', borderRadius: 4 }} />
         </div>
 
         {/* Workspace Pills */}
@@ -195,18 +208,79 @@ const TopBar = () => {
 
       {/* ── Right: System Tray ── */}
       <div className="topbar-section topbar-right">
+
         {/* Network */}
-        <div className="tray-item">
-          <WifiIcon />
-          <span>WiFi</span>
+        <div className="tray-item tray-interactive" tabIndex={0} style={{ position: 'relative' }} ref={wifiRef}>
+          <button className="tray-btn" style={{background:'none',border:'none',padding:0}} onClick={() => { setShowWifi((v) => !v); setShowVolume(false); }}>
+            <WifiIcon />
+            <span>WiFi</span>
+          </button>
+          <AnimatePresence>
+            {showWifi && (
+              <motion.div
+                className="popover popover-wifi"
+                initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                transition={{ duration: 0.18 }}
+                style={{ position: 'absolute', top: 32, right: 0, minWidth: 240, zIndex: 300 }}
+              >
+                <div style={{padding:'12px 16px 8px',borderBottom:'1px solid var(--ctp-surface1)',display:'flex',alignItems:'center',gap:8}}>
+                  <WifiIcon />
+                  <span style={{fontWeight:700,letterSpacing:1.2}}>WiFi Networks</span>
+                  <span style={{marginLeft:'auto',fontSize:11,opacity:0.7}}>powered by <span style={{color:'var(--ctp-blue)',fontWeight:600}}>Arch</span></span>
+                </div>
+                <div style={{padding:'8px 0'}}>
+                  {networks.map((net) => (
+                    <div key={net.ssid} style={{display:'flex',alignItems:'center',gap:10,padding:'7px 18px',cursor:'pointer',background:net.connected?'rgba(137,180,250,0.13)':'none',borderRadius:8,margin:'2px 8px',border:net.connected?'1.5px solid var(--ctp-blue)':'1.5px solid transparent'}}>
+                      <WifiIcon />
+                      <span style={{fontWeight:net.connected?700:500,color:net.connected?'var(--ctp-blue)':'var(--ctp-text)'}}>{net.ssid}</span>
+                      <span style={{marginLeft:'auto',fontSize:12,opacity:0.7}}>{'•'.repeat(net.signal)}</span>
+                      {net.connected && <span style={{fontSize:11,color:'var(--ctp-green)',fontWeight:600}}>Connected</span>}
+                    </div>
+                  ))}
+                </div>
+                <div style={{padding:'8px 16px 10px',fontSize:12,opacity:0.7,textAlign:'right'}}>Manage Networks</div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         <div className="tray-sep" />
 
+
         {/* Volume */}
-        <div className="tray-item">
-          <VolumeIcon />
-          <span>72%</span>
+        <div className="tray-item tray-interactive" tabIndex={0} style={{ position: 'relative' }} ref={volumeRef}>
+          <button className="tray-btn" style={{background:'none',border:'none',padding:0}} onClick={() => { setShowVolume((v) => !v); setShowWifi(false); }}>
+            <VolumeIcon />
+            <span>{mute ? 'Muted' : `${volume}%`}</span>
+          </button>
+          <AnimatePresence>
+            {showVolume && (
+              <motion.div
+                className="popover popover-volume"
+                initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                transition={{ duration: 0.18 }}
+                style={{ position: 'absolute', top: 32, right: 0, minWidth: 220, zIndex: 300 }}
+              >
+                <div style={{padding:'12px 16px 8px',borderBottom:'1px solid var(--ctp-surface1)',display:'flex',alignItems:'center',gap:8}}>
+                  <VolumeIcon />
+                  <span style={{fontWeight:700,letterSpacing:1.2}}>Volume</span>
+                  <span style={{marginLeft:'auto',fontSize:11,opacity:0.7}}>blend <span style={{color:'var(--ctp-mauve)',fontWeight:600}}>mac+arch</span></span>
+                </div>
+                <div style={{padding:'18px 24px 10px',display:'flex',flexDirection:'column',alignItems:'center',gap:12}}>
+                  <input type="range" min={0} max={100} value={volume} onChange={e => { setVolume(Number(e.target.value)); setMute(Number(e.target.value) === 0); }} style={{width:'100%',accentColor:'var(--ctp-blue)',height:4}} />
+                  <div style={{display:'flex',alignItems:'center',gap:10}}>
+                    <button onClick={() => setMute(m => !m)} style={{background:'none',border:'none',color:mute?'var(--ctp-red)':'var(--ctp-blue)',fontWeight:700,fontSize:13,cursor:'pointer',borderRadius:6,padding:'2px 10px',transition:'background 0.15s'}}>{mute ? 'Unmute' : 'Mute'}</button>
+                    <span style={{fontSize:12,opacity:0.7}}>{mute ? 'Muted' : `${volume}%`}</span>
+                  </div>
+                  <div style={{fontSize:11,opacity:0.6}}>Output: <span style={{color:'var(--ctp-blue)'}}>Speakers</span></div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         <div className="tray-sep" />
