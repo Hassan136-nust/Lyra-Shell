@@ -10,129 +10,35 @@ const createSvgIcon = (svg) => `data:image/svg+xml;utf8,${encodeURIComponent(svg
 const processIconMap = {
   'explorer.exe': {
     svg: createSvgIcon(`<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-      <rect width="64" height="64" rx="8" fill="#0078d4"/>
-      <path d="M16 20h32v24H16z" fill="#fff" opacity="0.9"/>
-      <rect x="20" y="24" width="10" height="12" fill="#0078d4" opacity="0.7"/>
-      <rect x="34" y="24" width="10" height="12" fill="#0078d4" opacity="0.5"/>
-    </svg>`),
-  },
-  'WindowsTerminal.exe': {
-    svg: createSvgIcon(`<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-      <rect width="64" height="64" rx="8" fill="#000"/>
-      <rect x="8" y="8" width="48" height="48" rx="4" fill="#012456"/>
-      <text x="16" y="40" font-size="20" fill="#00ff00" font-family="monospace">▶</text>
-    </svg>`),
-  },
-  'cmd.exe': {
-    svg: createSvgIcon(`<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-      <rect width="64" height="64" rx="8" fill="#0c0c0c"/>
-      <rect x="6" y="6" width="52" height="52" rx="3" fill="#1e1e1e"/>
-      <text x="14" y="42" font-size="18" fill="#89b4fa" font-family="monospace" font-weight="bold">&gt;_</text>
-    </svg>`),
-  },
-  'powershell.exe': {
-    svg: createSvgIcon(`<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-      <rect width="64" height="64" rx="8" fill="#0078d7"/>
-      <path d="M20 24L44 32L20 40Z" fill="#fff" opacity="0.9"/>
-      <circle cx="32" cy="48" r="3" fill="#fff" opacity="0.8"/>
-    </svg>`),
-  },
-  'chrome.exe': {
-    svg: createSvgIcon(`<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="32" cy="32" r="28" fill="#ea4335"/>
-      <circle cx="32" cy="32" r="22" fill="#fbbc04"/>
-      <circle cx="32" cy="32" r="16" fill="#4285f4"/>
-      <circle cx="32" cy="32" r="8" fill="#34a853"/>
-    </svg>`),
-  },
-  'msedge.exe': {
-    svg: createSvgIcon(`<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="32" cy="32" r="28" fill="#0078d4"/>
-      <path d="M32 10 Q45 18 45 32 Q45 46 32 54 Q32 40 32 32 Q32 24 32 10Z" fill="#00a4ef"/>
-    </svg>`),
-  },
-  'firefox.exe': {
-    svg: createSvgIcon(`<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="32" cy="32" r="26" fill="#ff9500"/>
-      <circle cx="32" cy="32" r="20" fill="#ffb100"/>
-      <path d="M32 14 Q42 20 42 32 Q42 44 32 50" fill="#ff6600"/>
-    </svg>`),
-  },
-  'brave.exe': {
-    svg: createSvgIcon(`<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-      <rect width="64" height="64" rx="8" fill="#fb542b"/>
-      <path d="M24 32 L28 24 L32 20 L36 24 L40 32 L36 40 L32 44 L28 40Z" fill="#fff"/>
-    </svg>`),
-  },
-  'Code.exe': {
-    svg: createSvgIcon(`<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-      <rect width="64" height="64" rx="8" fill="#0078d4"/>
-      <path d="M20 28 L28 36 L20 44" stroke="#fff" stroke-width="3" fill="none"/>
-      <path d="M44 28 L36 36 L44 44" stroke="#fff" stroke-width="3" fill="none"/>
-    </svg>`),
-  },
-  'Spotify.exe': {
-    svg: createSvgIcon(`<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="32" cy="32" r="28" fill="#1db954"/>
-      <circle cx="26" cy="28" r="2" fill="#000"/>
-      <circle cx="32" cy="32" r="2" fill="#000"/>
-      <circle cx="38" cy="28" r="2" fill="#000"/>
-    </svg>`),
-  },
-  'Discord.exe': {
-    svg: createSvgIcon(`<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-      <rect width="64" height="64" rx="8" fill="#5865f2"/>
-      <circle cx="24" cy="32" r="4" fill="#fff"/>
-      <circle cx="32" cy="32" r="4" fill="#fff"/>
-      <circle cx="40" cy="32" r="4" fill="#fff"/>
-    </svg>`),
-  },
-  'Telegram.exe': {
-    svg: createSvgIcon(`<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-      <rect width="64" height="64" rx="8" fill="#2aabee"/>
-      <path d="M24 36 L38 26 L24 32Z" fill="#fff"/>
-      <path d="M32 40 L42 26 L32 32Z" fill="#fff" opacity="0.8"/>
-    </svg>`),
-  },
-  'slack.exe': {
-    svg: createSvgIcon(`<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-      <rect width="64" height="64" rx="8" fill="#e01e5a"/>
-      <g fill="#fff" opacity="0.3">
-        <rect x="22" y="18" width="6" height="28"/>
-        <rect x="36" y="18" width="6" height="28"/>
-      </g>
-    </svg>`),
-  },
-  'notepad.exe': {
-    svg: createSvgIcon(`<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-      <rect x="12" y="10" width="40" height="44" rx="2" fill="#fce4b8" stroke="#999" stroke-width="1"/>
-      <line x1="14" y1="16" x2="50" y2="16" stroke="#999" stroke-width="0.5"/>
-      <line x1="14" y1="22" x2="50" y2="22" stroke="#999" stroke-width="0.5"/>
-      <line x1="14" y1="28" x2="50" y2="28" stroke="#999" stroke-width="0.5"/>
-    </svg>`),
-  },
-  'Notepad.exe': {
-    svg: createSvgIcon(`<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-      <rect x="12" y="10" width="40" height="44" rx="2" fill="#fce4b8" stroke="#999" stroke-width="1"/>
-      <line x1="14" y1="16" x2="50" y2="16" stroke="#999" stroke-width="0.5"/>
-      <line x1="14" y1="22" x2="50" y2="22" stroke="#999" stroke-width="0.5"/>
-      <line x1="14" y1="28" x2="50" y2="28" stroke="#999" stroke-width="0.5"/>
-    </svg>`),
-  },
-  'taskmgr.exe': {
-    svg: createSvgIcon(`<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-      <rect width="64" height="64" rx="8" fill="#0078d4"/>
-      <rect x="14" y="16" width="10" height="24" fill="#fff" opacity="0.8"/>
-      <rect x="28" y="20" width="10" height="20" fill="#fff" opacity="0.6"/>
-      <rect x="42" y="24" width="10" height="16" fill="#fff" opacity="0.4"/>
+      <defs>
+        <linearGradient id="folderBack" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#fdc940"/>
+          <stop offset="100%" stop-color="#f8a705"/>
+        </linearGradient>
+        <linearGradient id="folderFront" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#ffe67a"/>
+          <stop offset="100%" stop-color="#fcc42e"/>
+        </linearGradient>
+      </defs>
+      <path d="M4 14 C4 10.686 6.686 8 10 8 L24 8 C26.652 8 29.195 9.053 31.071 10.929 L34 13.858 C35.408 15.265 37.316 16.056 39.308 16.056 L54 16.056 C57.314 16.056 60 18.742 60 22.056 L60 52 C60 55.314 57.314 58 54 58 L10 58 C6.686 58 4 55.314 4 52 L4 14 Z" fill="url(#folderBack)"/>
+      <path d="M4 26 C4 23.791 5.791 22 8 22 L56 22 C58.209 22 60 23.791 60 26 L60 52 C60 55.313 57.313 58 54 58 L10 58 C6.686 58 4 55.314 4 52 L4 26 Z" fill="url(#folderFront)"/>
+      <rect x="22" y="32" width="20" height="6" rx="3" fill="#3b82f6" opacity="0.8"/>
     </svg>`),
   },
   'SystemSettings.exe': {
     svg: createSvgIcon(`<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="32" cy="32" r="8" fill="#0078d4" stroke="#fff" stroke-width="2"/>
-      <circle cx="32" cy="14" r="3" fill="#0078d4" stroke="#fff" stroke-width="1.5"/>
-      <circle cx="46" cy="22" r="3" fill="#0078d4" stroke="#fff" stroke-width="1.5"/>
-      <circle cx="50" cy="32" r="3" fill="#0078d4" stroke="#fff" stroke-width="1.5"/>
+      <rect width="64" height="64" rx="14" fill="#f3f4f6"/>
+      <path d="M32 14 C34.5 14 36.5 15.5 37 17.5 C39 18 41.5 19 43 20.5 C44 19 46.5 18 48.5 19.5 C50.5 21 50 24.5 49.5 26 C51 27.5 52 29.5 52.5 32 C52.5 34.5 51 36.5 49.5 38 C50 39.5 50.5 43 48.5 44.5 C46.5 46 44 45 43 43.5 C41.5 45 39 46 37 46.5 C36.5 48.5 34.5 50 32 50 C29.5 50 27.5 48.5 27 46.5 C25 46 22.5 45 21 43.5 C20 45 17.5 46 15.5 44.5 C13.5 43 14 39.5 14.5 38 C13 36.5 12 34.5 11.5 32 C11.5 29.5 13 27.5 14.5 26 C14 24.5 13.5 21 15.5 19.5 C17.5 18 20 19 21 20.5 C22.5 19 25 18 27 17.5 C27.5 15.5 29.5 14 32 14 Z" fill="#0078d4"/>
+      <circle cx="32" cy="32" r="9" fill="#f3f4f6"/>
+    </svg>`),
+  },
+  'Battle.net.exe': {
+    svg: createSvgIcon(`<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <rect width="64" height="64" rx="14" fill="#14181c"/>
+      <circle cx="28" cy="38" r="6" fill="#00aeff"/>
+      <circle cx="40" cy="28" r="8" fill="#00aeff"/>
+      <circle cx="38" cy="46" r="4" fill="#00aeff"/>
+      <circle cx="22" cy="26" r="4" fill="#00aeff" opacity="0.6"/>
     </svg>`),
   },
   'WINWORD.EXE': {
@@ -153,6 +59,14 @@ const processIconMap = {
       <text x="32" y="40" font-size="28" fill="#fff" font-weight="bold" text-anchor="middle">P</text>
     </svg>`),
   },
+  'Code.exe': {
+    svg: createSvgIcon(`<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <path d="M46.5 12.5 L34 5 L14 21 L14 43 L34 59 L46.5 51.5 C48 50.5 49 48.5 49 46.5 L49 17.5 C49 15.5 48 13.5 46.5 12.5 Z" fill="#007acc"/>
+      <path d="M49 17.5 L24 32 L49 46.5 Z" fill="#005a9e"/>
+      <path d="M34 5 L49 17.5 L49 46.5 L34 59" fill="#1f9cf0"/>
+      <polygon points="14,21 24,32 14,43" fill="#004a80"/>
+    </svg>`),
+  },
   'vlc.exe': {
     svg: createSvgIcon(`<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
       <rect width="64" height="64" rx="8" fill="#ff8800"/>
@@ -165,12 +79,12 @@ const processIconMap = {
 function getAppVisual(processName) {
   const icon = processIconMap[processName];
   if (icon) return icon;
-  
+
   // Fallback: create a simple colored badge with first letter
   const letter = processName?.charAt(0)?.toUpperCase() || '?';
   const colors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
   const color = colors[processName?.charCodeAt(0) % colors.length];
-  
+
   return {
     svg: createSvgIcon(`<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
       <rect width="64" height="64" rx="8" fill="${color}"/>
@@ -196,11 +110,11 @@ const DockIcon = ({ label, visual, isRunning, isActive, onClick, onContextMenu, 
     const centerX = bounds.left + bounds.width / 2;
     return value - centerX;
   });
-  const scaleTransform = useTransform(distance, [-200, 0, 200], [1, 1.22, 1]);
-  const yTransform = useTransform(distance, [-200, 0, 200], [0, -7, 0]);
+  const scaleTransform = useTransform(distance, [-160, 0, 160], [1, 1.45, 1]);
+  const yTransform = useTransform(distance, [-160, 0, 160], [0, -12, 0]);
 
-  const scale = useSpring(scaleTransform, { mass: 0.16, stiffness: 190, damping: 20 });
-  const y = useSpring(yTransform, { mass: 0.15, stiffness: 180, damping: 18 });
+  const scale = useSpring(scaleTransform, { mass: 0.12, stiffness: 220, damping: 16 });
+  const y = useSpring(yTransform, { mass: 0.12, stiffness: 220, damping: 16 });
 
   return (
     <motion.div
@@ -307,7 +221,7 @@ const Dock = () => {
             setRealIcons((prev) => ({ ...prev, [processPath]: iconDataUrl }));
           }
         })
-        .catch(() => {})
+        .catch(() => { })
         .finally(() => {
           iconRequestsRef.current.delete(processPath);
         });
@@ -403,7 +317,7 @@ const Dock = () => {
             }}
             isRunning={false}
             isActive={false}
-            onClick={() => {}}
+            onClick={() => { }}
             mouseX={mouseX}
           />
         </motion.div>

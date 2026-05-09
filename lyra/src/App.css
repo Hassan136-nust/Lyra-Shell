@@ -12,13 +12,20 @@
   box-shadow: 0 20px 45px rgba(2, 6, 23, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.08);
   color: var(--ctp-text);
   min-width: 260px;
-  animation: popoverIn 0.22s cubic-bezier(.4,2,.6,1) both;
+  animation: popoverIn 0.22s cubic-bezier(.4, 2, .6, 1) both;
   overflow: hidden;
 }
 
 @keyframes popoverIn {
-  0% { opacity: 0; transform: translateY(16px) scale(0.98);}
-  100% { opacity: 1; transform: translateY(0) scale(1);}
+  0% {
+    opacity: 0;
+    transform: translateY(16px) scale(0.98);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .popover-header {
@@ -105,8 +112,8 @@
 }
 
 .popover-wifi .network:hover {
-  background: rgba(137,180,250,0.16);
-  border: 1px solid rgba(137,180,250,0.35);
+  background: rgba(137, 180, 250, 0.16);
+  border: 1px solid rgba(137, 180, 250, 0.35);
   transform: translateY(-1px);
 }
 
@@ -201,6 +208,7 @@
   color: var(--ctp-blue);
   font-weight: 600;
 }
+
 /* ══════════════════════════════════════════════════════════════
    Lyra Shell — Arch Linux TopBar + macOS Dock
    Catppuccin Mocha Theme
@@ -436,7 +444,8 @@
   transition: all 0.15s ease;
 }
 
-.tray-btn:hover, .tray-btn.active {
+.tray-btn:hover,
+.tray-btn.active {
   background: rgba(205, 214, 244, 0.1);
   color: var(--ctp-text);
 }
@@ -600,6 +609,14 @@
   opacity: 1;
 }
 
+/* Ensure crisp scaling for dock icons */
+.dock-icon-img,
+.dock-icon {
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: high-quality;
+  transform-origin: bottom center;
+}
+
 /* Active indicator dot */
 .dock-dot {
   width: 4px;
@@ -671,18 +688,37 @@
 /* ── Animations ───────────────────────────────────────────────── */
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes slideUp {
-  from { transform: translateY(20px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 @keyframes bounce {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-8px);
+  }
 }
 
 /* ── Scrollbar in menus ───────────────────────────────────────── */

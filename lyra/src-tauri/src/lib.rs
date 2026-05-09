@@ -3,6 +3,8 @@ use serde::Serialize;
 use sysinfo::{Networks, System};
 use std::ffi::c_void;
 use std::collections::HashMap;
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 
 #[cfg(target_os = "windows")]
 use windows::Win32::Foundation::*;
@@ -363,8 +365,10 @@ fn get_app_icon(process_path: String) -> Result<String, String> {
             [Convert]::ToBase64String($ms.ToArray())"
         );
 
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
         let output = Command::new("powershell")
-            .args(["-NoProfile", "-Command", &script])
+            .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", &script])
+            .creation_flags(CREATE_NO_WINDOW)
             .output()
             .map_err(|e| format!("failed to extract icon: {e}"))?;
 
