@@ -29,7 +29,7 @@ Lyra is a **custom desktop shell replacement** for Windows that provides a compl
 
 ## 📸 Screenshots
 
-![Lyra Logo](lyra/docs/images/logo.png)
+![Lyra Logo](lyra/docs/images/w1.png)
 ### Desktop View
 - Clean wallpaper background
 - Top bar with system tray
