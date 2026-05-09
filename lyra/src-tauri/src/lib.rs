@@ -97,7 +97,16 @@ fn wide_null(value: &str) -> Vec<u16> {
 
 #[cfg(target_os = "windows")]
 fn shell_execute(target: &str, parameters: Option<&str>) -> Result<(), String> {
-    let operation = wide_null("open");
+    shell_execute_operation("open", target, parameters)
+}
+
+#[cfg(target_os = "windows")]
+fn shell_execute_operation(
+    operation: &str,
+    target: &str,
+    parameters: Option<&str>,
+) -> Result<(), String> {
+    let operation = wide_null(operation);
     let target = wide_null(target);
     let params = parameters.map(wide_null);
 
@@ -123,6 +132,11 @@ fn shell_execute(target: &str, parameters: Option<&str>) -> Result<(), String> {
     } else {
         Ok(())
     }
+}
+
+#[cfg(target_os = "windows")]
+fn shell_execute_elevated(target: &str, parameters: Option<&str>) -> Result<(), String> {
+    shell_execute_operation("runas", target, parameters)
 }
 
 fn command_no_window(program: &str) -> Command {
@@ -600,6 +614,71 @@ fn run_system_action(action: &str) -> Result<String, String> {
     }
 
     Ok(format!("{action} executed"))
+}
+
+#[tauri::command]
+fn open_datetime_settings() -> Result<(), String> {
+    throttle_action("datetime:settings", Duration::from_secs(2))?;
+
+    #[cfg(target_os = "windows")]
+    shell_execute("ms-settings:dateandtime", None)?;
+
+    #[cfg(not(target_os = "windows"))]
+    return Err("Date and time settings are only implemented on Windows".to_string());
+
+    Ok(())
+}
+
+#[tauri::command]
+fn set_system_datetime(value: String) -> Result<(), String> {
+    let trimmed = value.trim();
+    if trimmed.len() != 16 || !trimmed.contains('T') {
+        return Err("Expected datetime-local value like 2026-05-09T17:30".to_string());
+    }
+
+    throttle_action("datetime:set", Duration::from_secs(2))?;
+    let safe_value = trimmed.replace('\'', "''");
+    let script = format!(
+        "$d=[datetime]::ParseExact('{safe_value}','yyyy-MM-ddTHH:mm',[Globalization.CultureInfo]::InvariantCulture); Set-Date -Date $d"
+    );
+    let output = command_no_window("powershell")
+        .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", &script])
+        .output()
+        .map_err(|e| format!("failed to set date/time: {e}"))?;
+
+    if output.status.success() {
+        append_diag_log("INFO", "system date/time update requested");
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        #[cfg(target_os = "windows")]
+        {
+            let privilege_error =
+                stderr.contains("required privilege") || stderr.contains("Access is denied");
+            if privilege_error {
+                let script_path = std::env::temp_dir().join("lyra-set-date.ps1");
+                std::fs::write(&script_path, &script)
+                    .map_err(|e| format!("failed to prepare elevated date/time update: {e}"))?;
+                let params = format!(
+                    "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{}\"",
+                    script_path.display()
+                );
+                shell_execute_elevated("powershell.exe", Some(&params))?;
+                append_diag_log("INFO", "elevated system date/time update requested");
+                return Err(
+                    "Windows needs administrator approval. Accept the UAC prompt, then reopen the calendar."
+                        .to_string(),
+                );
+            }
+        }
+
+        Err(if stderr.is_empty() {
+            "Windows rejected the date/time change. Administrator rights may be required."
+                .to_string()
+        } else {
+            stderr
+        })
+    }
 }
 
 #[tauri::command]
@@ -1290,6 +1369,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             run_system_action,
+            open_datetime_settings,
+            set_system_datetime,
             get_running_windows,
             get_active_window,
             focus_window,

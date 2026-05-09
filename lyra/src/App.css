@@ -706,6 +706,162 @@
   font-weight: 600;
 }
 
+.clock-wrap {
+  position: relative;
+}
+
+.tray-clock-btn {
+  border: none;
+  cursor: pointer;
+  font: inherit;
+}
+
+.tray-clock-btn.active {
+  background: rgba(137, 180, 250, 0.14);
+  color: var(--ctp-text);
+}
+
+.calendar-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 310px;
+  padding: 12px;
+  background: linear-gradient(150deg, rgba(24, 24, 37, 0.96), rgba(17, 17, 27, 0.91));
+  backdrop-filter: blur(24px) saturate(1.45);
+  -webkit-backdrop-filter: blur(24px) saturate(1.45);
+  border: 1px solid rgba(137, 180, 250, 0.16);
+  border-radius: 16px;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  z-index: 240;
+}
+
+.calendar-head {
+  display: grid;
+  grid-template-columns: 32px 1fr 32px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.calendar-head span {
+  text-align: center;
+  color: var(--ctp-text);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.calendar-head button,
+.calendar-grid button,
+.datetime-actions button {
+  border: 1px solid rgba(137, 180, 250, 0.16);
+  border-radius: 9px;
+  background: rgba(49, 50, 68, 0.42);
+  color: var(--ctp-subtext1);
+  cursor: pointer;
+  font-family: var(--font-mono);
+}
+
+.calendar-head button {
+  width: 32px;
+  height: 28px;
+  font-size: 18px;
+}
+
+.calendar-weekdays,
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.calendar-weekdays {
+  margin-bottom: 5px;
+}
+
+.calendar-weekdays span {
+  text-align: center;
+  color: var(--ctp-overlay2);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.calendar-grid button {
+  height: 31px;
+  font-size: 11px;
+}
+
+.calendar-grid button.muted {
+  opacity: 0.38;
+}
+
+.calendar-grid button.today {
+  color: var(--ctp-crust);
+  background: var(--ctp-blue);
+  border-color: var(--ctp-blue);
+  font-weight: 900;
+}
+
+.calendar-grid button.selected:not(.today) {
+  color: var(--ctp-crust);
+  background: var(--ctp-mauve);
+  border-color: var(--ctp-mauve);
+  font-weight: 900;
+}
+
+.datetime-editor {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(137, 180, 250, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.datetime-editor input {
+  width: 100%;
+  height: 34px;
+  border: 1px solid rgba(137, 180, 250, 0.22);
+  border-radius: 10px;
+  background: rgba(17, 17, 27, 0.62);
+  color: var(--ctp-text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 0 9px;
+}
+
+.datetime-editor input:disabled {
+  opacity: 0.72;
+  color: var(--ctp-subtext1);
+  cursor: default;
+}
+
+.datetime-message {
+  max-height: 38px;
+  overflow: hidden;
+  color: var(--ctp-yellow);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.datetime-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.datetime-actions button {
+  flex: 1;
+  height: 30px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.datetime-actions button.primary {
+  color: var(--ctp-green);
+  border-color: rgba(166, 227, 161, 0.28);
+  background: rgba(166, 227, 161, 0.12);
+}
+
 .tray-sep {
   width: 1px;
   height: 14px;

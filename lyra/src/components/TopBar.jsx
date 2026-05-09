@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { invoke } from '@tauri-apps/api/core';
 import { useAppContext } from '../contexts/AppContext';
 import RealtimeTray from './RealtimeTray';
 import logo from '../../public/logo.png';
@@ -89,6 +90,23 @@ const MiniBar = ({ value, color = 'var(--ctp-blue)', width = 40 }) => (
   </div>
 );
 
+const toDateTimeLocalValue = (date) => {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
+
+const buildCalendarDays = (viewDate) => {
+  const year = viewDate.getFullYear();
+  const month = viewDate.getMonth();
+  const first = new Date(year, month, 1);
+  const start = new Date(year, month, 1 - first.getDay());
+  return Array.from({ length: 42 }, (_, index) => {
+    const day = new Date(start);
+    day.setDate(start.getDate() + index);
+    return day;
+  });
+};
+
 /* ── TopBar Component ─────────────────────────────────────────── */
 const TopBar = () => {
   const { activeWindow, systemInfo, activeWorkspace, setActiveWorkspace, runAction } = useAppContext();
@@ -96,11 +114,27 @@ const TopBar = () => {
   const [batteryLevel, setBatteryLevel] = useState(100);
   const [isCharging, setIsCharging] = useState(false);
   const [showPowerMenu, setShowPowerMenu] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [calendarView, setCalendarView] = useState(new Date());
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState(new Date());
+  const [dateTimeDraft, setDateTimeDraft] = useState(toDateTimeLocalValue(new Date()));
+  const [dateTimeEditing, setDateTimeEditing] = useState(false);
+  const [dateTimeMessage, setDateTimeMessage] = useState('');
   const powerMenuRef = useRef(null);
+  const calendarRef = useRef(null);
+  const clockPreviewRef = useRef(null);
 
   // Clock
   useEffect(() => {
-    const timer = setInterval(() => setTime(new Date()), 1000);
+    const timer = setInterval(() => {
+      const preview = clockPreviewRef.current;
+      if (preview && Date.now() < preview.until) {
+        setTime(new Date(preview.base.getTime() + Date.now() - preview.started));
+        return;
+      }
+      clockPreviewRef.current = null;
+      setTime(new Date());
+    }, 1000);
     return () => clearInterval(timer);
   }, []);
 
@@ -137,6 +171,7 @@ const TopBar = () => {
   useEffect(() => {
     const handler = (e) => {
       if (powerMenuRef.current && !powerMenuRef.current.contains(e.target)) setShowPowerMenu(false);
+      if (calendarRef.current && !calendarRef.current.contains(e.target)) setShowCalendar(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -144,6 +179,46 @@ const TopBar = () => {
 
   const formatDate = (d) => d.toLocaleDateString('en-US', { weekday: 'short', day: '2-digit', month: 'short' });
   const formatTime = (d) => d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+  const monthLabel = calendarView.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const today = new Date();
+  const calendarDays = buildCalendarDays(calendarView);
+  const isSameDay = (a, b) => a.toDateString() === b.toDateString();
+
+  const applyDateTime = async () => {
+    const updated = new Date(dateTimeDraft);
+    if (Number.isNaN(updated.getTime())) {
+      setDateTimeMessage('Choose a valid date and time');
+      return;
+    }
+
+    clockPreviewRef.current = {
+      base: updated,
+      started: Date.now(),
+      until: Date.now() + 60_000,
+    };
+    setTime(updated);
+    setCalendarView(updated);
+    setSelectedCalendarDate(updated);
+    setDateTimeDraft(toDateTimeLocalValue(updated));
+    setDateTimeMessage('Applying...');
+    try {
+      await invoke('set_system_datetime', { value: dateTimeDraft });
+      clockPreviewRef.current = null;
+      setTime(new Date());
+      setDateTimeMessage('Date and time updated');
+    } catch (error) {
+      setDateTimeMessage(String(error || 'Could not update date/time'));
+    }
+  };
+
+  const openDateTimeSettings = async () => {
+    try {
+      await invoke('open_datetime_settings');
+      setDateTimeMessage('');
+    } catch (error) {
+      setDateTimeMessage(String(error || 'Could not open settings'));
+    }
+  };
 
   const cpuColor = systemInfo.cpu_usage > 80 ? 'var(--ctp-red)' : systemInfo.cpu_usage > 50 ? 'var(--ctp-peach)' : 'var(--ctp-green)';
   const ramColor = systemInfo.memory_percent > 80 ? 'var(--ctp-red)' : systemInfo.memory_percent > 50 ? 'var(--ctp-peach)' : 'var(--ctp-blue)';
@@ -225,9 +300,85 @@ const TopBar = () => {
         <div className="tray-sep" />
 
         {/* Clock */}
-        <div className="tray-item tray-clock">
-          <span>{formatDate(time)}</span>
-          <span className="clock-time">{formatTime(time)}</span>
+        <div className="clock-wrap" ref={calendarRef}>
+          <button
+            className={`tray-item tray-clock tray-clock-btn ${showCalendar ? 'active' : ''}`}
+            onClick={() => {
+              setShowCalendar((v) => !v);
+              setShowPowerMenu(false);
+              setCalendarView(new Date());
+              setSelectedCalendarDate(new Date());
+              setDateTimeDraft(toDateTimeLocalValue(new Date()));
+              setDateTimeEditing(false);
+              setDateTimeMessage('');
+            }}
+          >
+            <span>{formatDate(time)}</span>
+            <span className="clock-time">{formatTime(time)}</span>
+          </button>
+
+          <AnimatePresence>
+            {showCalendar && (
+              <motion.div
+                className="calendar-popover"
+                initial={{ opacity: 0, y: -8, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -8, scale: 0.96 }}
+                transition={{ duration: 0.15 }}
+              >
+                <div className="calendar-head">
+                  <button onClick={() => setCalendarView(new Date(calendarView.getFullYear(), calendarView.getMonth() - 1, 1))}>‹</button>
+                  <span>{monthLabel}</span>
+                  <button onClick={() => setCalendarView(new Date(calendarView.getFullYear(), calendarView.getMonth() + 1, 1))}>›</button>
+                </div>
+                <div className="calendar-weekdays">
+                  {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, idx) => <span key={`${day}-${idx}`}>{day}</span>)}
+                </div>
+                <div className="calendar-grid">
+                  {calendarDays.map((day) => (
+                    <button
+                      key={day.toISOString()}
+                      className={`${day.getMonth() === calendarView.getMonth() ? '' : 'muted'} ${isSameDay(day, today) ? 'today' : ''} ${isSameDay(day, selectedCalendarDate) ? 'selected' : ''}`}
+                      onClick={() => {
+                        const selected = new Date(day);
+                        selected.setHours(time.getHours(), time.getMinutes(), 0, 0);
+                        setSelectedCalendarDate(selected);
+                        setCalendarView(selected);
+                        setDateTimeDraft(toDateTimeLocalValue(selected));
+                      }}
+                    >
+                      {day.getDate()}
+                    </button>
+                  ))}
+                </div>
+                <div className="datetime-editor">
+                  <input
+                    type="datetime-local"
+                    value={dateTimeDraft}
+                    disabled={!dateTimeEditing}
+                    onChange={(e) => {
+                      setDateTimeDraft(e.target.value);
+                      const selected = new Date(e.target.value);
+                      if (!Number.isNaN(selected.getTime())) {
+                        setSelectedCalendarDate(selected);
+                        setCalendarView(selected);
+                      }
+                    }}
+                  />
+                  {dateTimeMessage && <div className="datetime-message">{dateTimeMessage}</div>}
+                  <div className="datetime-actions">
+                    <button onClick={() => { const now = new Date(); setCalendarView(now); setSelectedCalendarDate(now); setDateTimeDraft(toDateTimeLocalValue(now)); setDateTimeMessage(''); }}>Today</button>
+                    <button onClick={openDateTimeSettings}>Settings</button>
+                    {dateTimeEditing ? (
+                      <button className="primary" onClick={applyDateTime}>Apply</button>
+                    ) : (
+                      <button className="primary" onClick={() => { setDateTimeEditing(true); setDateTimeMessage(''); }}>Change</button>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         <div className="tray-sep" />
