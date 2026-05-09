@@ -1,27 +1,33 @@
 import TopBar from './components/TopBar';
 import Dock from './components/Dock';
+import { AppProvider } from './contexts/AppContext';
 import './App.css';
 
 function App() {
   return (
-    <div className="relative w-screen h-screen overflow-hidden">
-      {/* Wallpaper Background */}
-      <img 
-        src="/wallpaper.png" 
-        alt="Desktop Wallpaper"
-        className="absolute inset-0 w-full h-full object-cover"
-        onError={(e) => {
-          e.target.style.display = 'none';
-          e.target.parentElement.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
-        }}
-      />
+    <AppProvider>
+      <div className="lyra-shell">
+        {/* Wallpaper Background */}
+        <div className="lyra-wallpaper">
+          <img
+            src="/wallpaper.png"
+            alt="Desktop"
+            className="lyra-wallpaper-img"
+            onError={(e) => {
+              e.target.style.display = 'none';
+            }}
+          />
+          {/* Subtle overlay for better contrast with UI elements */}
+          <div className="lyra-wallpaper-overlay" />
+        </div>
 
-      {/* Top Menu Bar */}
-      <TopBar />
+        {/* Top Bar — Arch Linux style */}
+        <TopBar />
 
-      {/* Left Dock */}
-      <Dock />
-    </div>
+        {/* Bottom Dock — macOS style */}
+        <Dock />
+      </div>
+    </AppProvider>
   );
 }
 

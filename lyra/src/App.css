@@ -1,170 +1,463 @@
-/* App-specific styles */
+/* ══════════════════════════════════════════════════════════════
+   Lyra Shell — Arch Linux TopBar + macOS Dock
+   Catppuccin Mocha Theme
+   ══════════════════════════════════════════════════════════════ */
 
-.lyra-desktop-shell {
-  color: #f8fafc;
-  background: #0a0f1c;
+/* ── Shell Container ──────────────────────────────────────────── */
+.lyra-shell {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--ctp-crust);
 }
 
+/* ── Wallpaper ────────────────────────────────────────────────── */
 .lyra-wallpaper {
-  background-image:
-    radial-gradient(circle at 15% 25%, rgba(56, 189, 248, 0.22), transparent 40%),
-    radial-gradient(circle at 80% 15%, rgba(167, 139, 250, 0.18), transparent 35%),
-    radial-gradient(circle at 70% 75%, rgba(16, 185, 129, 0.15), transparent 30%),
-    url('/wallpaper.png');
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  filter: saturate(1.12) contrast(1.06);
-  transform: scale(1.02);
+  position: absolute;
+  inset: 0;
+  z-index: 0;
 }
 
-.lyra-overlay {
-  background: linear-gradient(145deg, rgba(2, 6, 23, 0.52), rgba(2, 6, 23, 0.24));
+.lyra-wallpaper-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: saturate(1.1) brightness(0.95);
 }
 
-.lyra-grid-pattern {
-  opacity: 0.03;
-  background-image:
-    repeating-linear-gradient(
-      0deg,
-      rgba(255, 255, 255, 0.6) 0px,
-      rgba(255, 255, 255, 0.6) 1px,
-      transparent 1px,
-      transparent 105px
-    ),
-    repeating-linear-gradient(
-      90deg,
-      rgba(255, 255, 255, 0.6) 0px,
-      rgba(255, 255, 255, 0.6) 1px,
-      transparent 1px,
-      transparent 105px
-    );
+.lyra-wallpaper-overlay {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 50%, rgba(17, 17, 27, 0.3) 100%);
+  pointer-events: none;
 }
 
-.lyra-topbar {
-  background: linear-gradient(160deg, rgba(15, 23, 42, 0.52), rgba(15, 23, 42, 0.34));
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(22px);
-  box-shadow: 0 8px 34px rgba(2, 6, 23, 0.36);
-}
+/* ══════════════════════════════════════════════════════════════
+   TOP BAR — Arch Linux / Waybar Style
+   ══════════════════════════════════════════════════════════════ */
 
-.lyra-widget-panel {
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: 18px;
-  background: linear-gradient(160deg, rgba(15, 23, 42, 0.52), rgba(15, 23, 42, 0.3));
-  backdrop-filter: blur(24px);
-  box-shadow: 0 20px 35px rgba(2, 6, 23, 0.28);
-}
-
-.lyra-hero {
-  margin-bottom: 0;
-}
-
-.lyra-dock {
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: 22px;
-  background: linear-gradient(145deg, rgba(15, 23, 42, 0.54), rgba(30, 41, 59, 0.34));
-  backdrop-filter: blur(22px);
-  box-shadow: 0 20px 34px rgba(2, 6, 23, 0.38);
-}
-
-.lyra-dock-item {
-  color: rgba(248, 250, 252, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 14px;
-  min-width: 74px;
-  padding: 7px 12px;
+.topbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 32px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px;
+  background: rgba(17, 17, 27, 0.88);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  border-bottom: 1px solid rgba(137, 180, 250, 0.1);
+  font-family: var(--font-mono);
   font-size: 12px;
-  letter-spacing: 0.03em;
+  color: var(--ctp-subtext1);
+  user-select: none;
+}
+
+.topbar-section {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
+}
+
+.topbar-left {
+  flex: 1;
+  min-width: 0;
+}
+
+.topbar-right {
+  flex-shrink: 0;
+}
+
+/* Arch Logo */
+.topbar-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 22px;
+  border-radius: 6px;
+  background: rgba(137, 180, 250, 0.12);
+  color: var(--ctp-blue);
+  margin-right: 4px;
+  transition: background 0.2s;
+}
+
+.topbar-logo:hover {
+  background: rgba(137, 180, 250, 0.22);
+}
+
+/* Workspace Pills */
+.topbar-workspaces {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: 8px;
+}
+
+.ws-btn {
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ctp-overlay0);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.18s ease;
+}
+
+.ws-btn:hover {
+  background: rgba(203, 166, 247, 0.15);
+  color: var(--ctp-mauve);
+}
+
+.ws-btn.ws-active {
+  background: var(--ctp-mauve);
+  color: var(--ctp-crust);
+  box-shadow: 0 0 8px rgba(203, 166, 247, 0.35);
+}
+
+/* Active Window Title */
+.topbar-window-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.window-proc {
+  color: var(--ctp-blue);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.window-sep {
+  color: var(--ctp-overlay0);
+  font-size: 13px;
+}
+
+.window-name {
+  color: var(--ctp-subtext0);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Tray Items */
+.tray-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 5px;
+  font-size: 11px;
+  color: var(--ctp-subtext0);
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.tray-item:hover {
+  background: rgba(205, 214, 244, 0.08);
+  color: var(--ctp-text);
+}
+
+.tray-clock {
+  color: var(--ctp-text);
+  font-weight: 500;
+  gap: 8px;
+}
+
+.clock-time {
+  color: var(--ctp-blue);
+  font-weight: 600;
+}
+
+.tray-sep {
+  width: 1px;
+  height: 14px;
+  background: var(--ctp-surface1);
+  margin: 0 2px;
+  flex-shrink: 0;
+}
+
+.tray-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ctp-subtext0);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tray-btn:hover, .tray-btn.active {
+  background: rgba(205, 214, 244, 0.1);
+  color: var(--ctp-text);
+}
+
+/* Power Menu */
+.power-wrap {
+  position: relative;
+}
+
+.power-btn:hover {
+  color: var(--ctp-red);
+}
+
+.power-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 160px;
+  padding: 6px;
+  background: rgba(24, 24, 37, 0.95);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(137, 180, 250, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.03);
+  z-index: 200;
+}
+
+.power-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ctp-text);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.power-menu-item:hover {
+  background: rgba(205, 214, 244, 0.08);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   DOCK — macOS Style with Magnification
+   ══════════════════════════════════════════════════════════════ */
+
+.dock-container {
+  position: fixed;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+}
+
+.dock-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  padding: 6px 10px 8px;
+  background: rgba(24, 24, 37, 0.65);
+  backdrop-filter: blur(28px) saturate(1.5);
+  -webkit-backdrop-filter: blur(28px) saturate(1.5);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 18px;
+  box-shadow:
+    0 8px 40px rgba(0, 0, 0, 0.45),
+    0 2px 8px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* Individual icon wrapper */
+.dock-icon-wrap {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
-  background: linear-gradient(160deg, rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.05));
-  transition: transform 0.18s ease, background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
-.lyra-dock-item:hover {
-  transform: translateY(-3px) scale(1.03);
-  border-color: rgba(255, 255, 255, 0.38);
-  background: linear-gradient(160deg, rgba(148, 163, 184, 0.24), rgba(148, 163, 184, 0.08));
-  box-shadow: 0 10px 16px rgba(15, 23, 42, 0.35);
+/* The icon itself */
+.dock-icon {
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  transition: box-shadow 0.2s ease;
+  overflow: hidden;
 }
 
-.lyra-dock-dot {
-  width: 26px;
-  height: 26px;
+.dock-icon-img {
+  border-radius: 14px;
+  display: block;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  transition: box-shadow 0.2s ease;
+  overflow: hidden;
+}
+
+.dock-icon:hover {
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.dock-icon-img:hover {
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.dock-icon-letter {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: var(--font-sans);
+  line-height: 1;
+  pointer-events: none;
+}
+
+/* Tooltip */
+.dock-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 10px;
+  background: rgba(17, 17, 27, 0.92);
+  backdrop-filter: blur(12px);
+  color: var(--ctp-text);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.dock-icon-wrap:hover .dock-tooltip {
+  opacity: 1;
+}
+
+/* Active indicator dot */
+.dock-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--ctp-subtext0);
+  margin-top: 3px;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.dock-dot-active {
+  background: var(--ctp-blue);
+  box-shadow: 0 0 6px rgba(137, 180, 250, 0.5);
+  width: 5px;
+  height: 5px;
+}
+
+/* Separator */
+.dock-separator {
+  width: 1px;
+  height: 36px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 0 4px;
+  align-self: center;
+  flex-shrink: 0;
+}
+
+/* ── Context Menu ─────────────────────────────────────────────── */
+
+.context-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+}
+
+.context-menu {
+  position: fixed;
+  z-index: 200;
+  min-width: 120px;
+  padding: 4px;
+  background: rgba(24, 24, 37, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
-  background: linear-gradient(160deg, rgba(56, 189, 248, 0.85), rgba(59, 130, 246, 0.75));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 6px 14px rgba(37, 99, 235, 0.35);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 }
 
-.lyra-control-btn {
-  color: rgba(248, 250, 252, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 10px;
-  padding: 8px 10px;
-  font-size: 13px;
-  background: rgba(30, 41, 59, 0.45);
-  transition: background-color 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+.context-menu button {
+  display: block;
+  width: 100%;
+  padding: 7px 14px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ctp-text);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s;
 }
 
-.lyra-control-btn:hover:enabled {
-  transform: translateY(-1px);
-  border-color: rgba(255, 255, 255, 0.34);
-  background: rgba(51, 65, 85, 0.6);
+.context-menu button:hover {
+  background: rgba(137, 180, 250, 0.12);
 }
 
-.lyra-control-btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
+/* ── Animations ───────────────────────────────────────────────── */
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-.lyra-danger-btn {
-  background: rgba(127, 29, 29, 0.55);
-  border-color: rgba(252, 165, 165, 0.35);
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
-.lyra-danger-btn:hover:enabled {
-  background: rgba(153, 27, 27, 0.75);
-  border-color: rgba(252, 165, 165, 0.55);
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
 }
 
-.lyra-menu-btn,
-.lyra-icon-btn {
-  border-radius: 8px;
-  transition: background-color 0.18s ease, color 0.18s ease;
+/* ── Scrollbar in menus ───────────────────────────────────────── */
+.power-menu::-webkit-scrollbar,
+.context-menu::-webkit-scrollbar {
+  width: 4px;
 }
 
-.lyra-menu-btn {
-  padding: 4px 9px;
-  font-size: 13px;
-}
-
-.lyra-icon-btn {
-  padding: 6px;
-}
-
-.lyra-menu-btn:hover,
-.lyra-icon-btn:hover {
-  background-color: rgba(148, 163, 184, 0.24);
-  color: #fff;
-}
-
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.24);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.35);
+.power-menu::-webkit-scrollbar-thumb,
+.context-menu::-webkit-scrollbar-thumb {
+  background: var(--ctp-surface1);
+  border-radius: 2px;
 }
