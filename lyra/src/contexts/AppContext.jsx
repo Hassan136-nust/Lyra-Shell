@@ -13,9 +13,46 @@ async function tauriInvoke(cmd, args = {}, fallback = null) {
   try {
     const { invoke } = await import('@tauri-apps/api/core');
     return await invoke(cmd, args);
-  } catch {
+  } catch (error) {
+    if (cmd !== 'log_frontend_error') {
+      console.warn(`Tauri command failed: ${cmd}`, error);
+    }
     return fallback;
   }
+}
+
+function useStablePoll(callback, intervalMs, hiddenIntervalMs = intervalMs * 3) {
+  useEffect(() => {
+    let disposed = false;
+    let timerId = null;
+    let inFlight = false;
+
+    const schedule = () => {
+      if (disposed) return;
+      const delay = document.hidden ? hiddenIntervalMs : intervalMs;
+      timerId = window.setTimeout(tick, delay);
+    };
+
+    const tick = async () => {
+      if (disposed || inFlight) {
+        schedule();
+        return;
+      }
+      inFlight = true;
+      try {
+        await callback();
+      } finally {
+        inFlight = false;
+        schedule();
+      }
+    };
+
+    tick();
+    return () => {
+      disposed = true;
+      if (timerId) window.clearTimeout(timerId);
+    };
+  }, [callback, intervalMs, hiddenIntervalMs]);
 }
 
 export const AppProvider = ({ children }) => {
@@ -57,50 +94,24 @@ export const AppProvider = ({ children }) => {
     return true;
   };
 
-  // Fetch running windows every 2s
-  useEffect(() => {
-    let mounted = true;
-    let timerId = null;
-    const poll = async () => {
-      const result = await tauriInvoke('get_running_windows', {}, []);
-      if (mounted && Array.isArray(result)) {
-        setRunningApps((prev) => (sameRunningApps(prev, result) ? prev : result));
-      }
-      if (mounted) timerId = setTimeout(poll, 2500);
-    };
-    poll();
-    return () => { mounted = false; clearTimeout(timerId); };
-  }, []);
+  useStablePoll(useCallback(async () => {
+    const result = await tauriInvoke('get_running_windows', {}, []);
+    if (Array.isArray(result)) {
+      setRunningApps((prev) => (sameRunningApps(prev, result) ? prev : result));
+    }
+  }, []), 4000, 12000);
 
-  // Fetch active window every 1s
-  useEffect(() => {
-    let mounted = true;
-    let timerId = null;
-    const poll = async () => {
-      const result = await tauriInvoke('get_active_window', {}, null);
-      if (mounted) {
-        setActiveWindow((prev) => (sameWindow(prev, result) ? prev : result));
-      }
-      if (mounted) timerId = setTimeout(poll, 1500);
-    };
-    poll();
-    return () => { mounted = false; clearTimeout(timerId); };
-  }, []);
+  useStablePoll(useCallback(async () => {
+    const result = await tauriInvoke('get_active_window', {}, null);
+    setActiveWindow((prev) => (sameWindow(prev, result) ? prev : result));
+  }, []), 2500, 8000);
 
-  // Fetch system info every 5s
-  useEffect(() => {
-    let mounted = true;
-    let timerId = null;
-    const poll = async () => {
-      const result = await tauriInvoke('get_system_info', {}, null);
-      if (mounted && result) {
-        setSystemInfo((prev) => (sameSystemInfo(prev, result) ? prev : result));
-      }
-      if (mounted) timerId = setTimeout(poll, 5000);
-    };
-    poll();
-    return () => { mounted = false; clearTimeout(timerId); };
-  }, []);
+  useStablePoll(useCallback(async () => {
+    const result = await tauriInvoke('get_system_info', {}, null);
+    if (result) {
+      setSystemInfo((prev) => (sameSystemInfo(prev, result) ? prev : result));
+    }
+  }, []), 8000, 20000);
 
   const focusWindow = useCallback(async (hwnd) => {
     await tauriInvoke('focus_window', { hwnd });

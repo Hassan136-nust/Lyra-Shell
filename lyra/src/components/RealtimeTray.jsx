@@ -19,6 +19,29 @@ const VolumeIcon = () => (
   </svg>
 );
 
+const RefreshIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 12a9 9 0 0 1-15.5 6.2" />
+    <path d="M3 12A9 9 0 0 1 18.5 5.8" />
+    <path d="M18 2v4h4" />
+    <path d="M6 22v-4H2" />
+  </svg>
+);
+
+const SlidersIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <line x1="4" y1="21" x2="4" y2="14" />
+    <line x1="4" y1="10" x2="4" y2="3" />
+    <line x1="12" y1="21" x2="12" y2="12" />
+    <line x1="12" y1="8" x2="12" y2="3" />
+    <line x1="20" y1="21" x2="20" y2="16" />
+    <line x1="20" y1="12" x2="20" y2="3" />
+    <line x1="2" y1="14" x2="6" y2="14" />
+    <line x1="10" y1="8" x2="14" y2="8" />
+    <line x1="18" y1="16" x2="22" y2="16" />
+  </svg>
+);
+
 const RealtimeTray = () => {
   const [showWifi, setShowWifi] = useState(false);
   const [showVolume, setShowVolume] = useState(false);
@@ -27,6 +50,8 @@ const RealtimeTray = () => {
   const [isSlidingVolume, setIsSlidingVolume] = useState(false);
   const [networks, setNetworks] = useState([]);
   const [wifiStatus, setWifiStatus] = useState({ connected: false, ssid: '', signal: 0 });
+  const [wifiBusy, setWifiBusy] = useState(false);
+  const [wifiMessage, setWifiMessage] = useState('');
   const [netSpeed, setNetSpeed] = useState({ downMbps: 0, upMbps: 0 });
   const wifiRef = useRef(null);
   const volumeRef = useRef(null);
@@ -35,6 +60,9 @@ const RealtimeTray = () => {
   const wifiRequestInFlight = useRef(false);
   const audioRequestInFlight = useRef(false);
   const netRequestInFlight = useRef(false);
+  const volumeWriteTimer = useRef(null);
+  const wifiReconnectTimer = useRef(null);
+  const volumeRefreshTimers = useRef([]);
 
   const refreshWifi = useCallback(async () => {
     if (wifiRequestInFlight.current) return;
@@ -43,8 +71,10 @@ const RealtimeTray = () => {
       const [status, list] = await Promise.all([invoke('wifi_status'), invoke('list_wifi_networks')]);
       setWifiStatus(status);
       setNetworks(Array.isArray(list) ? list : []);
+      setWifiMessage('');
     } catch (e) {
       console.error('Failed to refresh WiFi data:', e);
+      setWifiMessage('Could not refresh WiFi right now.');
     } finally {
       wifiRequestInFlight.current = false;
     }
@@ -64,6 +94,53 @@ const RealtimeTray = () => {
     }
   }, [isSlidingVolume]);
 
+  const queueAudioRefreshBurst = useCallback(() => {
+    volumeRefreshTimers.current.forEach((timer) => clearTimeout(timer));
+    volumeRefreshTimers.current = [80, 240, 520].map((delay) => setTimeout(refreshAudio, delay));
+  }, [refreshAudio]);
+
+  const connectToNetwork = useCallback(async (ssid) => {
+    if (!ssid || wifiBusy) return;
+    setWifiBusy(true);
+    setWifiMessage(`Connecting to ${ssid}...`);
+    try {
+      await invoke('connect_wifi', { ssid });
+      setWifiMessage(`Connected to ${ssid}`);
+      if (wifiReconnectTimer.current) clearTimeout(wifiReconnectTimer.current);
+      wifiReconnectTimer.current = setTimeout(() => refreshWifi(), 1200);
+    } catch (e) {
+      console.error('Failed to connect WiFi:', e);
+      setWifiMessage('Saved profile required. Open settings to join new secured networks.');
+    } finally {
+      setWifiBusy(false);
+    }
+  }, [refreshWifi, wifiBusy]);
+
+  const disconnectWifi = useCallback(async () => {
+    if (wifiBusy) return;
+    setWifiBusy(true);
+    setWifiMessage('Disconnecting...');
+    try {
+      await invoke('disconnect_wifi');
+      setWifiMessage('Disconnected');
+      setWifiStatus({ connected: false, ssid: '', signal: 0 });
+      if (wifiReconnectTimer.current) clearTimeout(wifiReconnectTimer.current);
+      wifiReconnectTimer.current = setTimeout(() => refreshWifi(), 900);
+    } catch (e) {
+      console.error('Failed to disconnect WiFi:', e);
+      setWifiMessage('Disconnect failed.');
+    } finally {
+      setWifiBusy(false);
+    }
+  }, [refreshWifi, wifiBusy]);
+
+  const openWifiSettings = useCallback(() => {
+    invoke('open_wifi_settings').catch((error) => {
+      console.error('Failed to open WiFi settings:', error);
+      setWifiMessage('Could not open Windows WiFi settings.');
+    });
+  }, []);
+
   useEffect(() => {
     const handler = (e) => {
       if (wifiRef.current && !wifiRef.current.contains(e.target)) setShowWifi(false);
@@ -75,13 +152,29 @@ const RealtimeTray = () => {
 
   useEffect(() => {
     refreshAudio();
-    const id = setInterval(refreshAudio, showVolume ? 1200 : 1800);
+    const id = setInterval(refreshAudio, showVolume ? 650 : 1500);
     return () => clearInterval(id);
   }, [showVolume, refreshAudio]);
 
   useEffect(() => {
-    refreshWifi();
-    const id = setInterval(refreshWifi, showWifi ? 6000 : 15000);
+    const onKeyDown = (event) => {
+      if (['AudioVolumeUp', 'AudioVolumeDown', 'AudioVolumeMute'].includes(event.key)) {
+        queueAudioRefreshBurst();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('focus', queueAudioRefreshBurst);
+    document.addEventListener('visibilitychange', queueAudioRefreshBurst);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('focus', queueAudioRefreshBurst);
+      document.removeEventListener('visibilitychange', queueAudioRefreshBurst);
+    };
+  }, [queueAudioRefreshBurst]);
+
+  useEffect(() => {
+    if (showWifi) refreshWifi();
+    const id = setInterval(refreshWifi, showWifi ? 10000 : 30000);
     return () => clearInterval(id);
   }, [showWifi, refreshWifi]);
 
@@ -107,8 +200,14 @@ const RealtimeTray = () => {
       }
     };
     pollNetwork();
-    const id = setInterval(pollNetwork, 2500);
+    const id = setInterval(pollNetwork, 5000);
     return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => () => {
+    if (volumeWriteTimer.current) clearTimeout(volumeWriteTimer.current);
+    if (wifiReconnectTimer.current) clearTimeout(wifiReconnectTimer.current);
+    volumeRefreshTimers.current.forEach((timer) => clearTimeout(timer));
   }, []);
 
   return (
@@ -120,42 +219,60 @@ const RealtimeTray = () => {
         </button>
         <AnimatePresence>
           {showWifi && (
-            <motion.div className="popover popover-wifi" initial={{ opacity: 0, y: 8, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8, scale: 0.98 }} transition={{ duration: 0.18 }} style={{ position: 'absolute', top: 34, right: 0, width: 380, zIndex: 300 }}>
+            <motion.div className="popover popover-wifi wifi-manager" initial={{ opacity: 0, y: 8, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8, scale: 0.98 }} transition={{ duration: 0.18 }} style={{ position: 'absolute', top: 34, right: 0, width: 420, zIndex: 300 }}>
               <div className="popover-header popover-header-wifi">
                 <WifiIcon />
-                <span>WiFi Networks</span>
-                <span className="popover-powered">powered by <span>Lyra</span></span>
-              </div>
-              {wifiStatus?.connected && (
-                <div className="wifi-current">
-                  <span className="wifi-current-label">Connected</span>
-                  <span className="wifi-current-name">{wifiStatus.ssid || 'Unknown network'}</span>
+                <span>WiFi</span>
+                <div className="wifi-header-actions">
+                  <button className="wifi-icon-btn" onClick={refreshWifi} disabled={wifiBusy} title="Refresh networks">
+                    <RefreshIcon />
+                  </button>
+                  <button className="wifi-icon-btn" onClick={openWifiSettings} title="Windows WiFi settings">
+                    <SlidersIcon />
+                  </button>
                 </div>
-              )}
+              </div>
+              <div className={`wifi-current ${wifiStatus?.connected ? 'online' : 'offline'}`}>
+                <div className="wifi-orb"><WifiIcon /></div>
+                <div className="wifi-current-main">
+                  <span className="wifi-current-label">{wifiStatus?.connected ? 'Connected' : 'Offline'}</span>
+                  <span className="wifi-current-name">{wifiStatus?.connected ? wifiStatus.ssid || 'Unknown network' : 'Not connected'}</span>
+                </div>
+                <div className="wifi-current-meta">
+                  <span>{wifiStatus?.connected ? `${Math.round((wifiStatus.signal || 0) / 20)}/5` : '0/5'}</span>
+                  {wifiStatus?.connected && (
+                    <button className="wifi-action-btn danger" onClick={disconnectWifi} disabled={wifiBusy}>
+                      Disconnect
+                    </button>
+                  )}
+                </div>
+              </div>
+              {wifiMessage && <div className="wifi-message">{wifiMessage}</div>}
               <div className="wifi-list">
                 {networks.length === 0 && <div className="popover-empty">No networks found</div>}
                 {networks.map((net, idx) => (
-                  <div
+                  <button
                     key={`${net.ssid}-${idx}`}
                     className={`network${net.connected ? ' connected' : ''}`}
-                    style={{ display: 'flex', alignItems: 'center', gap: 10 }}
-                    onClick={async () => {
-                      try {
-                        await invoke('connect_wifi', { ssid: net.ssid });
-                        setTimeout(() => refreshWifi(), 1200);
-                      } catch (e) {
-                        console.error('Failed to connect WiFi:', e);
-                      }
-                    }}
+                    onClick={() => (net.connected ? disconnectWifi() : connectToNetwork(net.ssid))}
+                    disabled={wifiBusy}
                   >
                     <WifiIcon />
-                    <span className="network-name" style={{ fontWeight: net.connected ? 700 : 500, color: net.connected ? 'var(--ctp-blue)' : 'var(--ctp-text)' }}>{net.ssid}</span>
+                    <span className="network-copy">
+                      <span className="network-name">{net.ssid}</span>
+                      <span className="network-status">{net.connected ? 'Connected' : 'Saved networks connect instantly'}</span>
+                    </span>
                     <span className="network-signal">{Math.round((net.signal || 0) / 20)}/5</span>
-                    {net.connected && <span style={{ fontSize: 11, color: 'var(--ctp-green)', fontWeight: 600 }}>Connected</span>}
-                  </div>
+                    <span className={`wifi-action-pill ${net.connected ? 'danger' : ''}`}>
+                      {net.connected ? 'Disconnect' : 'Connect'}
+                    </span>
+                  </button>
                 ))}
               </div>
-              <div className="popover-footer">Manage Networks</div>
+              <div className="wifi-footer">
+                <span>New password-protected networks open in Windows settings.</span>
+                <button onClick={openWifiSettings}>Manage</button>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -197,7 +314,12 @@ const RealtimeTray = () => {
                   onChange={(e) => {
                     const v = Number(e.target.value);
                     setVolume(v);
-                    invoke('set_volume', { value: v });
+                    if (volumeWriteTimer.current) clearTimeout(volumeWriteTimer.current);
+                    volumeWriteTimer.current = setTimeout(() => {
+                      invoke('set_volume', { value: v }).catch((error) => {
+                        console.error('Failed to set volume:', error);
+                      });
+                    }, 120);
                   }}
                 />
                 <div className="volume-actions">

@@ -106,9 +106,15 @@ const TopBar = () => {
 
   // Battery
   useEffect(() => {
+    let battery = null;
+    let disposed = false;
+    let update = null;
+
     if ('getBattery' in navigator) {
       navigator.getBattery().then((b) => {
-        const update = () => {
+        if (disposed) return;
+        battery = b;
+        update = () => {
           setBatteryLevel(Math.round(b.level * 100));
           setIsCharging(b.charging);
         };
@@ -117,6 +123,14 @@ const TopBar = () => {
         b.addEventListener('chargingchange', update);
       });
     }
+
+    return () => {
+      disposed = true;
+      if (battery && update) {
+        battery.removeEventListener('levelchange', update);
+        battery.removeEventListener('chargingchange', update);
+      }
+    };
   }, []);
 
   // Close popovers on outside click

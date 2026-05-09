@@ -215,13 +215,14 @@ const Dock = () => {
   };
 
   useEffect(() => {
+    let disposed = false;
     const candidates = Array.from(
       new Set(
         runningApps
           .map((app) => app?.process_path)
           .filter((path) => typeof path === 'string' && path.trim().length > 0),
       ),
-    );
+    ).slice(0, 8);
 
     candidates.forEach((processPath) => {
       if (realIcons[processPath] || iconRequestsRef.current.has(processPath)) {
@@ -231,7 +232,7 @@ const Dock = () => {
 
       invoke('get_app_icon', { processPath })
         .then((iconDataUrl) => {
-          if (typeof iconDataUrl === 'string' && iconDataUrl.startsWith('data:image/')) {
+          if (!disposed && typeof iconDataUrl === 'string' && iconDataUrl.startsWith('data:image/')) {
             setRealIcons((prev) => ({ ...prev, [processPath]: iconDataUrl }));
           }
         })
@@ -240,7 +241,15 @@ const Dock = () => {
           iconRequestsRef.current.delete(processPath);
         });
     });
+
+    return () => {
+      disposed = true;
+    };
   }, [runningApps, realIcons]);
+
+  useEffect(() => () => {
+    clearTimeout(hoverTimeout.current);
+  }, []);
 
   const explorerApp = runningApps.find((a) => a.process_name?.toLowerCase() === 'explorer.exe');
   const terminalApp = runningApps.find((a) =>

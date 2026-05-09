@@ -1,25 +1,144 @@
+use std::collections::HashMap;
+use std::ffi::c_void;
+use std::fs::OpenOptions;
+use std::io::Write;
+use std::path::PathBuf;
 use std::process::Command;
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
+
 use serde::Serialize;
 use sysinfo::{Networks, System};
-use std::ffi::c_void;
-use std::collections::HashMap;
+use tauri::Manager;
+
+#[cfg(target_os = "windows")]
+use std::ffi::OsStr;
+#[cfg(target_os = "windows")]
+use std::os::windows::ffi::OsStrExt;
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 
 #[cfg(target_os = "windows")]
+use windows::core::{PCWSTR, PWSTR};
+#[cfg(target_os = "windows")]
 use windows::Win32::Foundation::*;
 #[cfg(target_os = "windows")]
-use windows::core::PWSTR;
-#[cfg(target_os = "windows")]
-use windows::Win32::UI::WindowsAndMessaging::*;
-#[cfg(target_os = "windows")]
-use windows::Win32::System::Threading::*;
-#[cfg(target_os = "windows")]
-use windows::Win32::System::Com::*;
+use windows::Win32::Media::Audio::Endpoints::*;
 #[cfg(target_os = "windows")]
 use windows::Win32::Media::Audio::*;
 #[cfg(target_os = "windows")]
-use windows::Win32::Media::Audio::Endpoints::*;
+use windows::Win32::System::Com::*;
+#[cfg(target_os = "windows")]
+use windows::Win32::System::Threading::*;
+#[cfg(target_os = "windows")]
+use windows::Win32::UI::Shell::ShellExecuteW;
+#[cfg(target_os = "windows")]
+use windows::Win32::UI::WindowsAndMessaging::*;
+
+static LOG_PATH: OnceLock<PathBuf> = OnceLock::new();
+static ACTION_LAST_RUN: OnceLock<Mutex<HashMap<String, Instant>>> = OnceLock::new();
+static SYSTEM: OnceLock<Mutex<System>> = OnceLock::new();
+
+#[derive(Serialize, Clone, Debug)]
+pub struct DiagnosticsInfo {
+    pub log_path: String,
+}
+
+fn append_diag_log(level: &str, message: impl AsRef<str>) {
+    let ts = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
+    let line = format!("[{ts}] [{level}] {}\n", message.as_ref());
+    let path = LOG_PATH
+        .get()
+        .cloned()
+        .unwrap_or_else(|| std::env::temp_dir().join("lyra.log"));
+
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
+        let _ = file.write_all(line.as_bytes());
+    }
+}
+
+fn install_panic_hook() {
+    std::panic::set_hook(Box::new(|info| {
+        let location = info
+            .location()
+            .map(|l| format!("{}:{}", l.file(), l.line()))
+            .unwrap_or_else(|| "unknown location".to_string());
+        append_diag_log("PANIC", format!("{info} at {location}"));
+    }));
+}
+
+fn throttle_action(key: &str, min_interval: Duration) -> Result<(), String> {
+    let mut last_run = ACTION_LAST_RUN
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .map_err(|_| "action throttle lock poisoned".to_string())?;
+
+    let now = Instant::now();
+    if let Some(previous) = last_run.get(key) {
+        if now.duration_since(*previous) < min_interval {
+            append_diag_log("WARN", format!("throttled repeated action: {key}"));
+            return Err(format!("{key} was requested too quickly"));
+        }
+    }
+    last_run.insert(key.to_string(), now);
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn wide_null(value: &str) -> Vec<u16> {
+    OsStr::new(value).encode_wide().chain(Some(0)).collect()
+}
+
+#[cfg(target_os = "windows")]
+fn shell_execute(target: &str, parameters: Option<&str>) -> Result<(), String> {
+    let operation = wide_null("open");
+    let target = wide_null(target);
+    let params = parameters.map(wide_null);
+
+    let result = unsafe {
+        ShellExecuteW(
+            HWND::default(),
+            PCWSTR(operation.as_ptr()),
+            PCWSTR(target.as_ptr()),
+            params
+                .as_ref()
+                .map(|p| PCWSTR(p.as_ptr()))
+                .unwrap_or(PCWSTR::null()),
+            PCWSTR::null(),
+            SW_SHOWNORMAL,
+        )
+    };
+
+    if (result.0 as isize) <= 32 {
+        Err(format!(
+            "ShellExecute failed with code {}",
+            result.0 as isize
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+fn command_no_window(program: &str) -> Command {
+    let mut command = Command::new(program);
+    #[cfg(target_os = "windows")]
+    {
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    command
+}
+
+fn command_output_no_window(program: &str, args: &[&str]) -> Result<std::process::Output, String> {
+    command_no_window(program)
+        .args(args)
+        .output()
+        .map_err(|e| format!("failed to execute {program}: {e}"))
+}
 
 // ── Data structures ──────────────────────────────────────────────
 
@@ -76,7 +195,12 @@ fn get_process_path_from_pid(pid: u32) -> String {
         if let Ok(handle) = handle {
             let mut buffer = [0u16; 1024];
             let mut size = buffer.len() as u32;
-            let result = QueryFullProcessImageNameW(handle, PROCESS_NAME_FORMAT(0), PWSTR(buffer.as_mut_ptr()), &mut size);
+            let result = QueryFullProcessImageNameW(
+                handle,
+                PROCESS_NAME_FORMAT(0),
+                PWSTR(buffer.as_mut_ptr()),
+                &mut size,
+            );
             let _ = CloseHandle(handle);
             if result.is_ok() && size > 0 {
                 return String::from_utf16_lossy(&buffer[..size as usize]);
@@ -120,8 +244,12 @@ unsafe extern "system" fn enum_windows_callback(hwnd: HWND, lparam: LPARAM) -> B
         // Skip known invisible/system classes
         if matches!(
             class_name.as_str(),
-            "Progman" | "WorkerW" | "Shell_TrayWnd" | "Shell_SecondaryTrayWnd"
-                | "DV2ControlHost" | "Windows.UI.Core.CoreWindow"
+            "Progman"
+                | "WorkerW"
+                | "Shell_TrayWnd"
+                | "Shell_SecondaryTrayWnd"
+                | "DV2ControlHost"
+                | "Windows.UI.Core.CoreWindow"
         ) {
             return BOOL(1);
         }
@@ -262,12 +390,18 @@ fn close_window(hwnd: i64) -> Result<String, String> {
 
 #[tauri::command]
 fn get_system_info() -> SystemInfoData {
-    let mut sys = System::new();
+    let mut sys = SYSTEM
+        .get_or_init(|| {
+            let mut sys = System::new();
+            sys.refresh_cpu_all();
+            sys.refresh_memory();
+            Mutex::new(sys)
+        })
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+
     sys.refresh_cpu_all();
     sys.refresh_memory();
-    // Small sleep so CPU reading is meaningful
-    std::thread::sleep(std::time::Duration::from_millis(200));
-    sys.refresh_cpu_all();
 
     let cpu = sys.global_cpu_usage();
     let mem_used = sys.used_memory() as f64 / 1_073_741_824.0;
@@ -288,61 +422,89 @@ fn get_system_info() -> SystemInfoData {
 
 #[tauri::command]
 fn run_system_action(action: &str) -> Result<String, String> {
-    let status = match action {
-        "open_explorer" => Command::new("explorer")
-            .status()
-            .map_err(|e| format!("failed: {e}"))?,
-        "open_task_manager" => Command::new("taskmgr")
-            .status()
-            .map_err(|e| format!("failed: {e}"))?,
-        "open_terminal" => Command::new("cmd")
-            .args(["/C", "start", "wt"])
-            .status()
-            .map_err(|e| format!("failed: {e}"))?,
-        "open_settings" => Command::new("cmd")
-            .args(["/C", "start", "ms-settings:"])
-            .status()
-            .map_err(|e| format!("failed: {e}"))?,
-        "open_browser" => Command::new("cmd")
-            .args(["/C", "start", "https://"])
-            .status()
-            .map_err(|e| format!("failed: {e}"))?,
-        "lock" => Command::new("rundll32.exe")
-            .args(["user32.dll,LockWorkStation"])
-            .status()
-            .map_err(|e| format!("failed: {e}"))?,
-        "sleep" => Command::new("rundll32.exe")
-            .args(["powrprof.dll,SetSuspendState", "0,1,0"])
-            .status()
-            .map_err(|e| format!("failed: {e}"))?,
-        "restart" => Command::new("shutdown")
-            .args(["/r", "/t", "0"])
-            .status()
-            .map_err(|e| format!("failed: {e}"))?,
-        "shutdown" => Command::new("shutdown")
-            .args(["/s", "/t", "0"])
-            .status()
-            .map_err(|e| format!("failed: {e}"))?,
-        "logout" => Command::new("shutdown")
-            .args(["/l"])
-            .status()
-            .map_err(|e| format!("failed: {e}"))?,
-        _ => return Err(format!("unsupported action: {action}")),
-    };
+    throttle_action(action, Duration::from_millis(900))?;
+    append_diag_log("INFO", format!("system action requested: {action}"));
 
-    if status.success() {
-        Ok(format!("{action} executed"))
-    } else {
-        Err(format!("{action} failed with status: {status}"))
+    #[cfg(target_os = "windows")]
+    match action {
+        "open_explorer" => shell_execute("explorer.exe", None)?,
+        "open_task_manager" => shell_execute("taskmgr.exe", None)?,
+        "open_terminal" => {
+            shell_execute("wt.exe", None).or_else(|_| shell_execute("powershell.exe", None))?
+        }
+        "open_settings" => shell_execute("ms-settings:", None)?,
+        "open_browser" => shell_execute("https://www.bing.com", None)?,
+        "lock" => {
+            let status = command_no_window("rundll32.exe")
+                .args(["user32.dll,LockWorkStation"])
+                .status()
+                .map_err(|e| format!("failed to lock workstation: {e}"))?;
+            if !status.success() {
+                return Err(format!("lock failed with status: {status}"));
+            }
+        }
+        "sleep" => {
+            let status = command_no_window("rundll32.exe")
+                .args(["powrprof.dll,SetSuspendState", "0,1,0"])
+                .status()
+                .map_err(|e| format!("failed to sleep: {e}"))?;
+            if !status.success() {
+                return Err(format!("sleep failed with status: {status}"));
+            }
+        }
+        "restart" => {
+            let status = command_no_window("shutdown")
+                .args(["/r", "/t", "0"])
+                .status()
+                .map_err(|e| format!("failed to restart: {e}"))?;
+            if !status.success() {
+                return Err(format!("restart failed with status: {status}"));
+            }
+        }
+        "shutdown" => {
+            let status = command_no_window("shutdown")
+                .args(["/s", "/t", "0"])
+                .status()
+                .map_err(|e| format!("failed to shutdown: {e}"))?;
+            if !status.success() {
+                return Err(format!("shutdown failed with status: {status}"));
+            }
+        }
+        "logout" => {
+            let status = command_no_window("shutdown")
+                .args(["/l"])
+                .status()
+                .map_err(|e| format!("failed to log out: {e}"))?;
+            if !status.success() {
+                return Err(format!("logout failed with status: {status}"));
+            }
+        }
+        _ => return Err(format!("unsupported action: {action}")),
     }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        return Err(format!("unsupported action on this platform: {action}"));
+    }
+
+    Ok(format!("{action} executed"))
 }
 
 #[tauri::command]
 fn launch_app(path: String) -> Result<String, String> {
-    Command::new("cmd")
-        .args(["/C", "start", "", &path])
-        .status()
-        .map_err(|e| format!("failed to launch: {e}"))?;
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err("empty app path".to_string());
+    }
+    throttle_action(&format!("launch:{trimmed}"), Duration::from_millis(900))?;
+    append_diag_log("INFO", format!("launch requested: {trimmed}"));
+
+    #[cfg(target_os = "windows")]
+    shell_execute(trimmed, None).map_err(|e| format!("failed to launch: {e}"))?;
+
+    #[cfg(not(target_os = "windows"))]
+    return Err("launch_app is only implemented on Windows".to_string());
+
     Ok("launched".into())
 }
 
@@ -365,10 +527,8 @@ fn get_app_icon(process_path: String) -> Result<String, String> {
             [Convert]::ToBase64String($ms.ToArray())"
         );
 
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-        let output = Command::new("powershell")
+        let output = command_no_window("powershell")
             .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", &script])
-            .creation_flags(CREATE_NO_WINDOW)
             .output()
             .map_err(|e| format!("failed to extract icon: {e}"))?;
 
@@ -393,16 +553,16 @@ fn get_app_icon(process_path: String) -> Result<String, String> {
 
 #[tauri::command]
 fn list_wifi_networks() -> Result<Vec<serde_json::Value>, String> {
-    let output = Command::new("netsh")
-        .args(["wlan", "show", "networks", "mode=bssid"])
-        .output()
-        .map_err(|e| format!("Failed to execute netsh: {}", e))?;
+    let output = command_output_no_window("netsh", &["wlan", "show", "networks", "mode=bssid"])?;
 
     let output_str = String::from_utf8_lossy(&output.stdout);
     let mut networks_map: HashMap<String, u32> = HashMap::new();
     let mut current_ssid = String::new();
     let current_wifi = wifi_status()?;
-    let connected_ssid = current_wifi["ssid"].as_str().unwrap_or_default().to_string();
+    let connected_ssid = current_wifi["ssid"]
+        .as_str()
+        .unwrap_or_default()
+        .to_string();
 
     for line in output_str.lines() {
         let line = line.trim();
@@ -451,10 +611,9 @@ fn list_wifi_networks() -> Result<Vec<serde_json::Value>, String> {
 #[tauri::command]
 fn connect_wifi(ssid: String) -> Result<(), String> {
     // Connect to WiFi using netsh
-    let output = Command::new("netsh")
-        .args(["wlan", "connect", &format!("name={}", ssid)])
-        .output()
-        .map_err(|e| format!("Failed to connect: {}", e))?;
+    throttle_action(&format!("wifi:connect:{ssid}"), Duration::from_secs(3))?;
+    let profile = format!("name={ssid}");
+    let output = command_output_no_window("netsh", &["wlan", "connect", &profile])?;
 
     if output.status.success() {
         Ok(())
@@ -464,12 +623,34 @@ fn connect_wifi(ssid: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn disconnect_wifi() -> Result<(), String> {
+    throttle_action("wifi:disconnect", Duration::from_secs(2))?;
+    let output = command_output_no_window("netsh", &["wlan", "disconnect"])?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}
+
+#[tauri::command]
+fn open_wifi_settings() -> Result<(), String> {
+    throttle_action("wifi:settings", Duration::from_secs(2))?;
+
+    #[cfg(target_os = "windows")]
+    shell_execute("ms-settings:network-wifi", None)?;
+
+    #[cfg(not(target_os = "windows"))]
+    return Err("WiFi settings are only implemented on Windows".to_string());
+
+    Ok(())
+}
+
+#[tauri::command]
 fn wifi_status() -> Result<serde_json::Value, String> {
     // Get current WiFi connection status
-    let output = Command::new("netsh")
-        .args(["wlan", "show", "interfaces"])
-        .output()
-        .map_err(|e| format!("Failed to get status: {}", e))?;
+    let output = command_output_no_window("netsh", &["wlan", "show", "interfaces"])?;
 
     let output_str = String::from_utf8_lossy(&output.stdout);
     let mut ssid = String::new();
@@ -640,12 +821,43 @@ fn set_mute(value: bool) -> Result<(), String> {
     }
 }
 
+#[tauri::command]
+fn log_frontend_error(message: String, source: Option<String>) {
+    let source = source.unwrap_or_else(|| "frontend".to_string());
+    append_diag_log("FRONTEND", format!("{source}: {message}"));
+}
+
+#[tauri::command]
+fn get_diagnostics_info() -> DiagnosticsInfo {
+    DiagnosticsInfo {
+        log_path: LOG_PATH
+            .get()
+            .cloned()
+            .unwrap_or_else(|| std::env::temp_dir().join("lyra.log"))
+            .display()
+            .to_string(),
+    }
+}
+
 // ── Entry point ──────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    install_panic_hook();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .setup(|app| {
+            let log_path = app
+                .handle()
+                .path()
+                .app_log_dir()
+                .unwrap_or_else(|_| std::env::temp_dir())
+                .join("lyra.log");
+            let _ = LOG_PATH.set(log_path);
+            append_diag_log("INFO", "Lyra started");
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             run_system_action,
             get_running_windows,
@@ -658,13 +870,22 @@ pub fn run() {
             get_app_icon,
             list_wifi_networks,
             connect_wifi,
+            disconnect_wifi,
+            open_wifi_settings,
             wifi_status,
             get_network_counters,
             get_volume,
             set_volume,
             get_mute,
-            set_mute
+            set_mute,
+            log_frontend_error,
+            get_diagnostics_info
         ])
         .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .unwrap_or_else(|error| {
+            append_diag_log(
+                "FATAL",
+                format!("error while running tauri application: {error}"),
+            );
+        });
 }
