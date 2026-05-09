@@ -27,6 +27,8 @@ use windows::Win32::Media::Audio::Endpoints::*;
 #[cfg(target_os = "windows")]
 use windows::Win32::Media::Audio::*;
 #[cfg(target_os = "windows")]
+use windows::Win32::NetworkManagement::WiFi::*;
+#[cfg(target_os = "windows")]
 use windows::Win32::System::Com::*;
 #[cfg(target_os = "windows")]
 use windows::Win32::System::Threading::*;
@@ -147,6 +149,107 @@ fn xml_escape(value: &str) -> String {
         .replace('>', "&gt;")
         .replace('"', "&quot;")
         .replace('\'', "&apos;")
+}
+
+#[cfg(target_os = "windows")]
+fn set_enterprise_eap_credentials(
+    profile_name: &str,
+    username: &str,
+    password: &str,
+) -> Result<(), String> {
+    let (domain, user_name) = username
+        .split_once('\\')
+        .map(|(domain, user)| (domain.to_string(), user.to_string()))
+        .unwrap_or_else(|| (String::new(), username.to_string()));
+
+    let escaped_username = xml_escape(&user_name);
+    let escaped_password = xml_escape(password);
+    let escaped_domain = xml_escape(&domain);
+    let escaped_routing_identity = xml_escape(username);
+
+    let eap_user_xml = format!(
+        r#"<?xml version="1.0"?>
+<EapHostUserCredentials xmlns="http://www.microsoft.com/provisioning/EapHostUserCredentials"
+  xmlns:eapCommon="http://www.microsoft.com/provisioning/EapCommon"
+  xmlns:baseEap="http://www.microsoft.com/provisioning/BaseEapMethodUserCredentials">
+  <EapMethod>
+    <eapCommon:Type>25</eapCommon:Type>
+    <eapCommon:AuthorId>0</eapCommon:AuthorId>
+  </EapMethod>
+  <Credentials xmlns:eapUser="http://www.microsoft.com/provisioning/EapUserPropertiesV1"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:baseEap="http://www.microsoft.com/provisioning/BaseEapUserPropertiesV1"
+    xmlns:MsPeap="http://www.microsoft.com/provisioning/MsPeapUserPropertiesV1"
+    xmlns:MsChapV2="http://www.microsoft.com/provisioning/MsChapV2UserPropertiesV1">
+    <baseEap:Eap>
+      <baseEap:Type>25</baseEap:Type>
+      <MsPeap:EapType>
+        <MsPeap:RoutingIdentity>{escaped_routing_identity}</MsPeap:RoutingIdentity>
+        <baseEap:Eap>
+          <baseEap:Type>26</baseEap:Type>
+          <MsChapV2:EapType>
+            <MsChapV2:Username>{escaped_username}</MsChapV2:Username>
+            <MsChapV2:Password>{escaped_password}</MsChapV2:Password>
+            <MsChapV2:LogonDomain>{escaped_domain}</MsChapV2:LogonDomain>
+          </MsChapV2:EapType>
+        </baseEap:Eap>
+      </MsPeap:EapType>
+    </baseEap:Eap>
+  </Credentials>
+</EapHostUserCredentials>"#
+    );
+
+    unsafe {
+        let mut negotiated_version = 0;
+        let mut client_handle = HANDLE::default();
+        let open_result = WlanOpenHandle(2, None, &mut negotiated_version, &mut client_handle);
+        if open_result != 0 {
+            return Err(format!("WlanOpenHandle failed: {open_result}"));
+        }
+
+        let result = (|| {
+            let mut interface_list: *mut WLAN_INTERFACE_INFO_LIST = std::ptr::null_mut();
+            let enum_result = WlanEnumInterfaces(client_handle, None, &mut interface_list);
+            if enum_result != 0 {
+                return Err(format!("WlanEnumInterfaces failed: {enum_result}"));
+            }
+            if interface_list.is_null() {
+                return Err("No WiFi interfaces found".to_string());
+            }
+
+            let list = &*interface_list;
+            let info_ptr = list.InterfaceInfo.as_ptr();
+            let profile_w = wide_null(profile_name);
+            let eap_w = wide_null(&eap_user_xml);
+            let mut last_error = None;
+
+            for index in 0..list.dwNumberOfItems {
+                let interface_info = *info_ptr.add(index as usize);
+                let set_result = WlanSetProfileEapXmlUserData(
+                    client_handle,
+                    &interface_info.InterfaceGuid,
+                    PCWSTR(profile_w.as_ptr()),
+                    WLAN_SET_EAPHOST_FLAGS(0),
+                    PCWSTR(eap_w.as_ptr()),
+                    None,
+                );
+                if set_result == 0 {
+                    WlanFreeMemory(interface_list as _);
+                    return Ok(());
+                }
+                last_error = Some(set_result);
+            }
+
+            WlanFreeMemory(interface_list as _);
+            Err(format!(
+                "WlanSetProfileEapXmlUserData failed: {}",
+                last_error.unwrap_or(0)
+            ))
+        })();
+
+        let _ = WlanCloseHandle(client_handle, None);
+        result
+    }
 }
 
 // ── Data structures ──────────────────────────────────────────────
@@ -920,7 +1023,8 @@ fn connect_enterprise_wifi(ssid: String, username: String, password: String) -> 
         return Err(String::from_utf8_lossy(&add_output.stderr).to_string());
     }
 
-    let _ = username;
+    set_enterprise_eap_credentials(&ssid, &username, &password)?;
+
     append_diag_log(
         "INFO",
         format!("enterprise WiFi profile prepared for {ssid}"),
