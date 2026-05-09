@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ffi::c_void;
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -138,6 +138,15 @@ fn command_output_no_window(program: &str, args: &[&str]) -> Result<std::process
         .args(args)
         .output()
         .map_err(|e| format!("failed to execute {program}: {e}"))
+}
+
+fn xml_escape(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&apos;")
 }
 
 // ── Data structures ──────────────────────────────────────────────
@@ -551,13 +560,36 @@ fn get_app_icon(process_path: String) -> Result<String, String> {
 
 // ── WiFi Commands (Real Windows Data) ───────────────────────────
 
+fn get_saved_wifi_profiles() -> Result<HashSet<String>, String> {
+    let output = command_output_no_window("netsh", &["wlan", "show", "profiles"])?;
+    let output_str = String::from_utf8_lossy(&output.stdout);
+    let mut profiles = HashSet::new();
+
+    for line in output_str.lines() {
+        let line = line.trim();
+        if line.contains("All User Profile") && line.contains(':') {
+            if let Some((_, name)) = line.split_once(':') {
+                let profile = name.trim();
+                if !profile.is_empty() {
+                    profiles.insert(profile.to_string());
+                }
+            }
+        }
+    }
+
+    Ok(profiles)
+}
+
 #[tauri::command]
 fn list_wifi_networks() -> Result<Vec<serde_json::Value>, String> {
     let output = command_output_no_window("netsh", &["wlan", "show", "networks", "mode=bssid"])?;
 
     let output_str = String::from_utf8_lossy(&output.stdout);
-    let mut networks_map: HashMap<String, u32> = HashMap::new();
+    let mut networks_map: HashMap<String, (u32, String, String)> = HashMap::new();
+    let saved_profiles = get_saved_wifi_profiles().unwrap_or_default();
     let mut current_ssid = String::new();
+    let mut current_auth = String::new();
+    let mut current_encryption = String::new();
     let current_wifi = wifi_status()?;
     let connected_ssid = current_wifi["ssid"]
         .as_str()
@@ -570,6 +602,18 @@ fn list_wifi_networks() -> Result<Vec<serde_json::Value>, String> {
             let parts: Vec<&str> = line.split(':').collect();
             if parts.len() > 1 {
                 current_ssid = parts[1].trim().to_string();
+                current_auth.clear();
+                current_encryption.clear();
+            }
+        } else if line.starts_with("Authentication") && line.contains(":") {
+            let parts: Vec<&str> = line.split(':').collect();
+            if parts.len() > 1 {
+                current_auth = parts[1].trim().to_string();
+            }
+        } else if line.starts_with("Encryption") && line.contains(":") {
+            let parts: Vec<&str> = line.split(':').collect();
+            if parts.len() > 1 {
+                current_encryption = parts[1].trim().to_string();
             }
         } else if line.starts_with("Signal") && line.contains(":") {
             let parts: Vec<&str> = line.split(':').collect();
@@ -578,9 +622,17 @@ fn list_wifi_networks() -> Result<Vec<serde_json::Value>, String> {
                 let current_signal = signal_str.parse().unwrap_or(0);
 
                 if !current_ssid.is_empty() {
-                    let existing = networks_map.entry(current_ssid.clone()).or_insert(0);
-                    if current_signal > *existing {
-                        *existing = current_signal;
+                    let existing = networks_map.entry(current_ssid.clone()).or_insert((
+                        0,
+                        current_auth.clone(),
+                        current_encryption.clone(),
+                    ));
+                    if current_signal > existing.0 {
+                        *existing = (
+                            current_signal,
+                            current_auth.clone(),
+                            current_encryption.clone(),
+                        );
                     }
                     current_ssid.clear();
                 }
@@ -590,19 +642,68 @@ fn list_wifi_networks() -> Result<Vec<serde_json::Value>, String> {
 
     let mut networks: Vec<serde_json::Value> = networks_map
         .into_iter()
-        .map(|(ssid, signal)| {
+        .map(|(ssid, (signal, auth, encryption))| {
+            let auth_lower = auth.to_lowercase();
+            let enterprise = auth_lower.contains("enterprise") || auth_lower.contains("802.1x");
+            let secure = !auth_lower.contains("open");
+            let saved = saved_profiles.contains(&ssid);
             serde_json::json!({
                 "ssid": ssid,
                 "signal": signal,
+                "auth": auth,
+                "encryption": encryption,
+                "secure": secure,
+                "enterprise": enterprise,
+                "requiresIdentity": enterprise,
+                "requiresPassword": secure,
+                "saved": saved,
+                "visible": true,
                 "connected": !connected_ssid.is_empty() && connected_ssid == ssid
             })
         })
         .collect();
 
+    for profile in saved_profiles {
+        let exists = networks
+            .iter()
+            .any(|network| network["ssid"].as_str() == Some(profile.as_str()));
+        if !exists {
+            networks.push(serde_json::json!({
+                "ssid": profile,
+                "signal": 0,
+                "auth": "Saved",
+                "encryption": "",
+                "secure": true,
+                "enterprise": false,
+                "requiresIdentity": false,
+                "requiresPassword": true,
+                "saved": true,
+                "visible": false,
+                "connected": !connected_ssid.is_empty() && connected_ssid == profile
+            }));
+        }
+    }
+
     networks.sort_by(|a, b| {
+        let ac = a["connected"].as_bool().unwrap_or(false);
+        let bc = b["connected"].as_bool().unwrap_or(false);
+        let av = a["visible"].as_bool().unwrap_or(false);
+        let bv = b["visible"].as_bool().unwrap_or(false);
+        let asaved = a["saved"].as_bool().unwrap_or(false);
+        let bsaved = b["saved"].as_bool().unwrap_or(false);
         let sa = a["signal"].as_u64().unwrap_or(0);
         let sb = b["signal"].as_u64().unwrap_or(0);
-        sb.cmp(&sa)
+
+        bc.cmp(&ac)
+            .then_with(|| bv.cmp(&av))
+            .then_with(|| sb.cmp(&sa))
+            .then_with(|| bsaved.cmp(&asaved))
+            .then_with(|| {
+                a["ssid"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .cmp(b["ssid"].as_str().unwrap_or_default())
+            })
     });
 
     Ok(networks)
@@ -623,9 +724,234 @@ fn connect_wifi(ssid: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn connect_wifi_with_password(
+    ssid: String,
+    password: String,
+    auth: Option<String>,
+    encryption: Option<String>,
+) -> Result<(), String> {
+    let ssid = ssid.trim().to_string();
+    let password = password.trim().to_string();
+    if ssid.is_empty() {
+        return Err("SSID is required".to_string());
+    }
+
+    let auth_label = auth.unwrap_or_default();
+    let encryption_label = encryption.unwrap_or_default();
+    let auth_lower = auth_label.to_lowercase();
+    let is_open = auth_lower.contains("open");
+
+    if !is_open && password.len() < 8 {
+        return Err("WiFi password must be at least 8 characters".to_string());
+    }
+
+    throttle_action(&format!("wifi:join:{ssid}"), Duration::from_secs(3))?;
+
+    let auth_value = if is_open {
+        "open"
+    } else if auth_lower.contains("wpa3") {
+        "WPA3SAE"
+    } else if auth_lower.contains("wpa2") {
+        "WPA2PSK"
+    } else if auth_lower.contains("wpa") {
+        "WPAPSK"
+    } else {
+        "WPA2PSK"
+    };
+
+    let encryption_lower = encryption_label.to_lowercase();
+    let encryption_value = if is_open {
+        "none"
+    } else if encryption_lower.contains("tkip") {
+        "TKIP"
+    } else {
+        "AES"
+    };
+
+    let escaped_ssid = xml_escape(&ssid);
+    let profile = if is_open {
+        format!(
+            r#"<?xml version="1.0"?>
+<WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">
+  <name>{escaped_ssid}</name>
+  <SSIDConfig><SSID><name>{escaped_ssid}</name></SSID></SSIDConfig>
+  <connectionType>ESS</connectionType>
+  <connectionMode>manual</connectionMode>
+  <MSM><security><authEncryption><authentication>open</authentication><encryption>none</encryption><useOneX>false</useOneX></authEncryption></security></MSM>
+</WLANProfile>"#
+        )
+    } else {
+        let escaped_password = xml_escape(&password);
+        format!(
+            r#"<?xml version="1.0"?>
+<WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">
+  <name>{escaped_ssid}</name>
+  <SSIDConfig><SSID><name>{escaped_ssid}</name></SSID></SSIDConfig>
+  <connectionType>ESS</connectionType>
+  <connectionMode>manual</connectionMode>
+  <MSM>
+    <security>
+      <authEncryption><authentication>{auth_value}</authentication><encryption>{encryption_value}</encryption><useOneX>false</useOneX></authEncryption>
+      <sharedKey><keyType>passPhrase</keyType><protected>false</protected><keyMaterial>{escaped_password}</keyMaterial></sharedKey>
+    </security>
+  </MSM>
+</WLANProfile>"#
+        )
+    };
+
+    let safe_name: String = ssid
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let profile_path = std::env::temp_dir().join(format!("lyra-wifi-{safe_name}.xml"));
+    std::fs::write(&profile_path, profile).map_err(|e| format!("failed to write profile: {e}"))?;
+
+    let profile_path_string = profile_path.display().to_string();
+    let add_output = command_output_no_window(
+        "netsh",
+        &[
+            "wlan",
+            "add",
+            "profile",
+            &format!("filename={profile_path_string}"),
+        ],
+    );
+    let _ = std::fs::remove_file(&profile_path);
+    let add_output = add_output?;
+
+    if !add_output.status.success() {
+        return Err(String::from_utf8_lossy(&add_output.stderr).to_string());
+    }
+
+    connect_wifi(ssid)
+}
+
+#[tauri::command]
+fn connect_enterprise_wifi(ssid: String, username: String, password: String) -> Result<(), String> {
+    let ssid = ssid.trim().to_string();
+    let username = username.trim().to_string();
+    let password = password.trim().to_string();
+    if ssid.is_empty() {
+        return Err("SSID is required".to_string());
+    }
+    if username.is_empty() {
+        return Err("Username is required".to_string());
+    }
+    if password.is_empty() {
+        return Err("Password is required".to_string());
+    }
+
+    throttle_action(&format!("wifi:enterprise:{ssid}"), Duration::from_secs(3))?;
+
+    let escaped_ssid = xml_escape(&ssid);
+    let profile = format!(
+        r#"<?xml version="1.0"?>
+<WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">
+  <name>{escaped_ssid}</name>
+  <SSIDConfig><SSID><name>{escaped_ssid}</name></SSID></SSIDConfig>
+  <connectionType>ESS</connectionType>
+  <connectionMode>manual</connectionMode>
+  <MSM>
+    <security>
+      <authEncryption><authentication>WPA2</authentication><encryption>AES</encryption><useOneX>true</useOneX></authEncryption>
+      <OneX xmlns="http://www.microsoft.com/networking/OneX/v1">
+        <cacheUserData>true</cacheUserData>
+        <authMode>user</authMode>
+        <EAPConfig>
+          <EapHostConfig xmlns="http://www.microsoft.com/provisioning/EapHostConfig">
+            <EapMethod><Type xmlns="http://www.microsoft.com/provisioning/EapCommon">25</Type><VendorId xmlns="http://www.microsoft.com/provisioning/EapCommon">0</VendorId><VendorType xmlns="http://www.microsoft.com/provisioning/EapCommon">0</VendorType><AuthorId xmlns="http://www.microsoft.com/provisioning/EapCommon">0</AuthorId></EapMethod>
+            <Config xmlns="http://www.microsoft.com/provisioning/EapHostConfig">
+              <Eap xmlns="http://www.microsoft.com/provisioning/BaseEapConnectionPropertiesV1">
+                <Type>25</Type>
+                <EapType xmlns="http://www.microsoft.com/provisioning/MsPeapConnectionPropertiesV1">
+                  <ServerValidation><DisableUserPromptForServerValidation>false</DisableUserPromptForServerValidation></ServerValidation>
+                  <FastReconnect>true</FastReconnect>
+                  <InnerEapOptional>false</InnerEapOptional>
+                  <Eap xmlns="http://www.microsoft.com/provisioning/BaseEapConnectionPropertiesV1">
+                    <Type>26</Type>
+                    <EapType xmlns="http://www.microsoft.com/provisioning/MsChapV2ConnectionPropertiesV1"><UseWinLogonCredentials>false</UseWinLogonCredentials></EapType>
+                  </Eap>
+                  <EnableQuarantineChecks>false</EnableQuarantineChecks>
+                  <RequireCryptoBinding>false</RequireCryptoBinding>
+                </EapType>
+              </Eap>
+            </Config>
+          </EapHostConfig>
+        </EAPConfig>
+      </OneX>
+    </security>
+  </MSM>
+</WLANProfile>"#
+    );
+
+    let safe_name: String = ssid
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let profile_path = std::env::temp_dir().join(format!("lyra-enterprise-wifi-{safe_name}.xml"));
+    std::fs::write(&profile_path, profile).map_err(|e| format!("failed to write profile: {e}"))?;
+
+    let profile_path_string = profile_path.display().to_string();
+    let add_output = command_output_no_window(
+        "netsh",
+        &[
+            "wlan",
+            "add",
+            "profile",
+            &format!("filename={profile_path_string}"),
+        ],
+    );
+    let _ = std::fs::remove_file(&profile_path);
+    let add_output = add_output?;
+
+    if !add_output.status.success() {
+        return Err(String::from_utf8_lossy(&add_output.stderr).to_string());
+    }
+
+    let _ = username;
+    append_diag_log(
+        "INFO",
+        format!("enterprise WiFi profile prepared for {ssid}"),
+    );
+    connect_wifi(ssid)
+}
+
+#[tauri::command]
 fn disconnect_wifi() -> Result<(), String> {
     throttle_action("wifi:disconnect", Duration::from_secs(2))?;
     let output = command_output_no_window("netsh", &["wlan", "disconnect"])?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}
+
+#[tauri::command]
+fn forget_wifi(ssid: String) -> Result<(), String> {
+    let ssid = ssid.trim().to_string();
+    if ssid.is_empty() {
+        return Err("SSID is required".to_string());
+    }
+
+    throttle_action(&format!("wifi:forget:{ssid}"), Duration::from_secs(2))?;
+    let output = command_output_no_window(
+        "netsh",
+        &["wlan", "delete", "profile", &format!("name={ssid}")],
+    )?;
 
     if output.status.success() {
         Ok(())
@@ -870,7 +1196,10 @@ pub fn run() {
             get_app_icon,
             list_wifi_networks,
             connect_wifi,
+            connect_wifi_with_password,
+            connect_enterprise_wifi,
             disconnect_wifi,
+            forget_wifi,
             open_wifi_settings,
             wifi_status,
             get_network_counters,
