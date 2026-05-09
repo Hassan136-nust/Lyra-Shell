@@ -2,6 +2,7 @@ use std::process::Command;
 use serde::Serialize;
 use sysinfo::System;
 use std::ffi::c_void;
+use std::collections::HashMap;
 
 #[cfg(target_os = "windows")]
 use windows::Win32::Foundation::*;
@@ -9,6 +10,12 @@ use windows::Win32::Foundation::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 #[cfg(target_os = "windows")]
 use windows::Win32::System::Threading::*;
+#[cfg(target_os = "windows")]
+use windows::Win32::System::Com::*;
+#[cfg(target_os = "windows")]
+use windows::Win32::Media::Audio::*;
+#[cfg(target_os = "windows")]
+use windows::Win32::Media::Audio::Endpoints::*;
 
 // ── Data structures ──────────────────────────────────────────────
 
@@ -311,16 +318,16 @@ fn launch_app(path: String) -> Result<String, String> {
 
 #[tauri::command]
 fn list_wifi_networks() -> Result<Vec<serde_json::Value>, String> {
-    // Use netsh to get real WiFi networks on Windows
     let output = Command::new("netsh")
         .args(["wlan", "show", "networks", "mode=bssid"])
         .output()
         .map_err(|e| format!("Failed to execute netsh: {}", e))?;
 
     let output_str = String::from_utf8_lossy(&output.stdout);
-    let mut networks = Vec::new();
+    let mut networks_map: HashMap<String, u32> = HashMap::new();
     let mut current_ssid = String::new();
-    let mut current_signal = 0;
+    let current_wifi = wifi_status()?;
+    let connected_ssid = current_wifi["ssid"].as_str().unwrap_or_default().to_string();
 
     for line in output_str.lines() {
         let line = line.trim();
@@ -333,19 +340,35 @@ fn list_wifi_networks() -> Result<Vec<serde_json::Value>, String> {
             let parts: Vec<&str> = line.split(':').collect();
             if parts.len() > 1 {
                 let signal_str = parts[1].trim().replace("%", "");
-                current_signal = signal_str.parse().unwrap_or(0);
-                
+                let current_signal = signal_str.parse().unwrap_or(0);
+
                 if !current_ssid.is_empty() {
-                    networks.push(serde_json::json!({
-                        "ssid": current_ssid.clone(),
-                        "signal": current_signal,
-                        "connected": false
-                    }));
+                    let existing = networks_map.entry(current_ssid.clone()).or_insert(0);
+                    if current_signal > *existing {
+                        *existing = current_signal;
+                    }
                     current_ssid.clear();
                 }
             }
         }
     }
+
+    let mut networks: Vec<serde_json::Value> = networks_map
+        .into_iter()
+        .map(|(ssid, signal)| {
+            serde_json::json!({
+                "ssid": ssid,
+                "signal": signal,
+                "connected": !connected_ssid.is_empty() && connected_ssid == ssid
+            })
+        })
+        .collect();
+
+    networks.sort_by(|a, b| {
+        let sa = a["signal"].as_u64().unwrap_or(0);
+        let sb = b["signal"].as_u64().unwrap_or(0);
+        sb.cmp(&sa)
+    });
 
     Ok(networks)
 }
@@ -404,66 +427,114 @@ fn wifi_status() -> Result<serde_json::Value, String> {
 
 // ── Audio Commands (Real Windows Data) ──────────────────────────
 
+#[cfg(target_os = "windows")]
+fn with_endpoint_volume<T, F>(f: F) -> Result<T, String>
+where
+    F: FnOnce(&IAudioEndpointVolume) -> Result<T, String>,
+{
+    unsafe {
+        let mut initialized = false;
+        let init_hr = CoInitializeEx(None, COINIT_MULTITHREADED);
+        if init_hr.is_ok() {
+            initialized = true;
+        } else if init_hr != RPC_E_CHANGED_MODE {
+            return Err(format!("COM init failed: {init_hr:?}"));
+        }
+
+        let result = (|| -> Result<T, String> {
+            let enumerator: IMMDeviceEnumerator =
+                CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)
+                    .map_err(|e| format!("Audio enumerator error: {e}"))?;
+
+            let device = enumerator
+                .GetDefaultAudioEndpoint(eRender, eConsole)
+                .map_err(|e| format!("Default audio device error: {e}"))?;
+
+            let endpoint: IAudioEndpointVolume = device
+                .Activate::<IAudioEndpointVolume>(CLSCTX_ALL, None)
+                .map_err(|e| format!("Audio endpoint activation error: {e}"))?;
+
+            f(&endpoint)
+        })();
+
+        if initialized {
+            CoUninitialize();
+        }
+
+        result
+    }
+}
+
 #[tauri::command]
 fn get_volume() -> Result<u32, String> {
-    // Get real volume using PowerShell
-    let output = Command::new("powershell")
-        .args([
-            "-Command",
-            "(New-Object -ComObject WScript.Shell).SendKeys([char]174); Start-Sleep -Milliseconds 100; Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('{VOLUMEDOWN}'); $null"
-        ])
-        .output()
-        .map_err(|e| format!("Failed to get volume: {}", e))?;
-
-    // Alternative: Parse from SoundVolumeView or use COM API
-    // For now, return a calculated value
-    Ok(50) // Placeholder - needs proper Windows Audio API implementation
+    #[cfg(target_os = "windows")]
+    {
+        with_endpoint_volume(|endpoint| {
+            let scalar = unsafe {
+                endpoint
+                    .GetMasterVolumeLevelScalar()
+                    .map_err(|e| format!("Read volume failed: {e}"))?
+            };
+            Ok((scalar.clamp(0.0, 1.0) * 100.0).round() as u32)
+        })
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Ok(50)
+    }
 }
 
 #[tauri::command]
 fn set_volume(value: u32) -> Result<(), String> {
-    // Set volume using nircmd (if installed) or PowerShell
-    let volume_level = (value as f32 / 100.0 * 65535.0) as u32;
-    
-    let output = Command::new("powershell")
-        .args([
-            "-Command",
-            &format!(
-                "$obj = New-Object -ComObject WScript.Shell; $obj.SendKeys([char]173)"
-            )
-        ])
-        .output()
-        .map_err(|e| format!("Failed to set volume: {}", e))?;
-
-    if output.status.success() {
+    #[cfg(target_os = "windows")]
+    {
+        let clamped = value.min(100) as f32 / 100.0;
+        with_endpoint_volume(|endpoint| unsafe {
+            endpoint
+                .SetMasterVolumeLevelScalar(clamped, std::ptr::null())
+                .map_err(|e| format!("Set volume failed: {e}"))?;
+            Ok(())
+        })
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
         Ok(())
-    } else {
-        Err("Failed to set volume".to_string())
     }
 }
 
 #[tauri::command]
 fn get_mute() -> Result<bool, String> {
-    // Check mute status - placeholder
-    // Would need Windows Audio API or registry check
-    Ok(false)
+    #[cfg(target_os = "windows")]
+    {
+        with_endpoint_volume(|endpoint| {
+            let muted = unsafe {
+                endpoint
+                    .GetMute()
+                    .map_err(|e| format!("Read mute failed: {e}"))?
+            };
+            Ok(muted.as_bool())
+        })
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Ok(false)
+    }
 }
 
 #[tauri::command]
 fn set_mute(value: bool) -> Result<(), String> {
-    // Toggle mute using PowerShell
-    let output = Command::new("powershell")
-        .args([
-            "-Command",
-            "(New-Object -ComObject WScript.Shell).SendKeys([char]173)"
-        ])
-        .output()
-        .map_err(|e| format!("Failed to toggle mute: {}", e))?;
-
-    if output.status.success() {
+    #[cfg(target_os = "windows")]
+    {
+        with_endpoint_volume(|endpoint| unsafe {
+            endpoint
+                .SetMute(BOOL::from(value), std::ptr::null())
+                .map_err(|e| format!("Set mute failed: {e}"))?;
+            Ok(())
+        })
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
         Ok(())
-    } else {
-        Err("Failed to toggle mute".to_string())
     }
 }
 

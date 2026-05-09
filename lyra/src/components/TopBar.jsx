@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppContext } from '../contexts/AppContext';
@@ -114,26 +114,40 @@ const TopBar = () => {
   const [showVolume, setShowVolume] = useState(false);
   const [volume, setVolume] = useState(0);
   const [mute, setMute] = useState(false);
+  const [isSlidingVolume, setIsSlidingVolume] = useState(false);
   const [networks, setNetworks] = useState([]);
   const [wifiStatus, setWifiStatus] = useState({ connected: false, ssid: '', signal: 0 });
-    // Fetch WiFi networks and status from Tauri backend
-    useEffect(() => {
-      if (showWifi) {
-        invoke('list_wifi_networks').then(setNetworks);
-        invoke('wifi_status').then(setWifiStatus);
-      }
-    }, [showWifi]);
-
-    // Fetch volume/mute from Tauri backend
-    useEffect(() => {
-      if (showVolume) {
-        invoke('get_volume').then(setVolume);
-        invoke('get_mute').then(setMute);
-      }
-    }, [showVolume]);
   const powerMenuRef = useRef(null);
   const wifiRef = useRef(null);
   const volumeRef = useRef(null);
+
+  const refreshWifi = useCallback(async () => {
+    try {
+      const [status, list] = await Promise.all([
+        invoke('wifi_status'),
+        invoke('list_wifi_networks'),
+      ]);
+      setWifiStatus(status);
+      setNetworks(Array.isArray(list) ? list : []);
+    } catch (e) {
+      console.error('Failed to refresh WiFi data:', e);
+    }
+  }, []);
+
+  const refreshAudio = useCallback(async () => {
+    try {
+      const [currentVolume, muted] = await Promise.all([
+        invoke('get_volume'),
+        invoke('get_mute'),
+      ]);
+      if (!isSlidingVolume) {
+        setVolume(Number(currentVolume ?? 0));
+      }
+      setMute(Boolean(muted));
+    } catch (e) {
+      console.error('Failed to refresh audio data:', e);
+    }
+  }, [isSlidingVolume]);
 
   // Clock
   useEffect(() => {
@@ -166,6 +180,20 @@ const TopBar = () => {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  useEffect(() => {
+    if (!showWifi) return;
+    refreshWifi();
+    const id = setInterval(refreshWifi, 6000);
+    return () => clearInterval(id);
+  }, [showWifi, refreshWifi]);
+
+  useEffect(() => {
+    if (!showVolume) return;
+    refreshAudio();
+    const id = setInterval(refreshAudio, 1000);
+    return () => clearInterval(id);
+  }, [showVolume, refreshAudio]);
 
   const formatDate = (d) => d.toLocaleDateString('en-US', { weekday: 'short', day: '2-digit', month: 'short' });
   const formatTime = (d) => d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
@@ -235,30 +263,43 @@ const TopBar = () => {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 8, scale: 0.98 }}
                 transition={{ duration: 0.18 }}
-                style={{ position: 'absolute', top: 32, right: 0, minWidth: 240, zIndex: 300 }}
+                style={{ position: 'absolute', top: 34, right: 0, width: 380, zIndex: 300 }}
               >
-                <div className="popover-header" style={{display:'flex',alignItems:'center',gap:8,padding:'12px 16px 8px',borderBottom:'1px solid var(--ctp-surface1)'}}>
+                <div className="popover-header popover-header-wifi">
                   <WifiIcon />
                   <span>WiFi Networks</span>
-                  <span style={{marginLeft:'auto',fontSize:11,opacity:0.7}}>powered by <span style={{color:'var(--ctp-blue)',fontWeight:600}}>Arch</span></span>
+                  <span className="popover-powered">powered by <span>Arch</span></span>
                 </div>
-                <div style={{padding:'8px 0'}}>
-                  {networks.length === 0 && <div style={{padding:'12px',textAlign:'center',opacity:0.6}}>No networks found</div>}
-                  {networks.map((net) => (
+                {wifiStatus?.connected && (
+                  <div className="wifi-current">
+                    <span className="wifi-current-label">Connected</span>
+                    <span className="wifi-current-name">{wifiStatus.ssid || 'Unknown network'}</span>
+                  </div>
+                )}
+                <div className="wifi-list">
+                  {networks.length === 0 && <div className="popover-empty">No networks found</div>}
+                  {networks.map((net, idx) => (
                     <div
-                      key={net.ssid}
+                      key={`${net.ssid}-${idx}`}
                       className={`network${net.connected ? ' connected' : ''}`}
                       style={{display:'flex',alignItems:'center',gap:10}}
-                      onClick={() => invoke('connect_wifi', { ssid: net.ssid })}
+                      onClick={async () => {
+                        try {
+                          await invoke('connect_wifi', { ssid: net.ssid });
+                          setTimeout(() => refreshWifi(), 1200);
+                        } catch (e) {
+                          console.error('Failed to connect WiFi:', e);
+                        }
+                      }}
                     >
                       <WifiIcon />
-                      <span style={{ fontWeight: net.connected ? 700 : 500, color: net.connected ? 'var(--ctp-blue)' : 'var(--ctp-text)' }}>{net.ssid}</span>
-                      <span style={{ marginLeft: 'auto', fontSize: 12, opacity: 0.7 }}>{'•'.repeat(net.signal)}</span>
+                      <span className="network-name" style={{ fontWeight: net.connected ? 700 : 500, color: net.connected ? 'var(--ctp-blue)' : 'var(--ctp-text)' }}>{net.ssid}</span>
+                      <span className="network-signal">{Math.round((net.signal || 0) / 20)}/5</span>
                       {net.connected && <span style={{ fontSize: 11, color: 'var(--ctp-green)', fontWeight: 600 }}>Connected</span>}
                     </div>
                   ))}
                 </div>
-                <div style={{padding:'8px 16px 10px',fontSize:12,opacity:0.7,textAlign:'right'}}>Manage Networks</div>
+                <div className="popover-footer">Manage Networks</div>
               </motion.div>
             )}
           </AnimatePresence>
@@ -281,39 +322,45 @@ const TopBar = () => {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 8, scale: 0.98 }}
                 transition={{ duration: 0.18 }}
-                style={{ position: 'absolute', top: 32, right: 0, minWidth: 220, zIndex: 300 }}
+                style={{ position: 'absolute', top: 34, right: 0, width: 350, zIndex: 300 }}
               >
-                <div className="popover-header" style={{display:'flex',alignItems:'center',gap:8,padding:'12px 16px 8px',borderBottom:'1px solid var(--ctp-surface1)'}}>
+                <div className="popover-header popover-header-volume">
                   <VolumeIcon />
-                  <span>Volume</span>
-                  <span style={{marginLeft:'auto',fontSize:11,opacity:0.7}}>blend <span style={{color:'var(--ctp-mauve)',fontWeight:600}}>mac+arch</span></span>
+                  <span>Volume blend</span>
+                  <span className="popover-powered">mac + arch</span>
                 </div>
-                <div style={{padding:'18px 24px 10px',display:'flex',flexDirection:'column',alignItems:'center',gap:12}}>
+                <div className="volume-popover-body">
                   <input
+                    className="volume-slider"
                     type="range"
                     min={0}
                     max={100}
                     value={volume}
+                    onMouseDown={() => setIsSlidingVolume(true)}
+                    onMouseUp={() => setIsSlidingVolume(false)}
+                    onTouchStart={() => setIsSlidingVolume(true)}
+                    onTouchEnd={() => setIsSlidingVolume(false)}
                     onChange={e => {
                       const v = Number(e.target.value);
                       setVolume(v);
-                      setMute(v === 0);
                       invoke('set_volume', { value: v });
                     }}
                   />
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div className="volume-actions">
                     <button
-                      onClick={() => {
-                        invoke('set_mute', { value: !mute });
-                        setMute(m => !m);
+                      className="volume-mute-btn"
+                      onClick={async () => {
+                        const next = !mute;
+                        await invoke('set_mute', { value: next });
+                        setMute(next);
+                        refreshAudio();
                       }}
-                      style={{ background: 'none', border: 'none', color: mute ? 'var(--ctp-red)' : 'var(--ctp-blue)', fontWeight: 700, fontSize: 13, cursor: 'pointer', borderRadius: 6, padding: '2px 10px', transition: 'background 0.15s' }}
                     >
                       {mute ? 'Unmute' : 'Mute'}
                     </button>
-                    <span style={{ fontSize: 12, opacity: 0.7 }}>{mute ? 'Muted' : `${volume}%`}</span>
+                    <span className="volume-value">{mute ? 'Muted' : `${volume}%`}</span>
                   </div>
-                  <div style={{ fontSize: 11, opacity: 0.6 }}>Output: <span style={{ color: 'var(--ctp-blue)' }}>Speakers</span></div>
+                  <div className="volume-output">Output: <span>Speakers</span></div>
                 </div>
               </motion.div>
             )}
