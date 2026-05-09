@@ -521,10 +521,15 @@
   align-items: center;
   cursor: pointer;
   flex-shrink: 0;
+  width: 44px;
+  height: 52px;
+  justify-content: flex-end;
 }
 
 /* The icon itself */
 .dock-icon {
+  width: 40px;
+  height: 40px;
   border-radius: 14px;
   display: flex;
   align-items: center;
@@ -537,6 +542,9 @@
 }
 
 .dock-icon-img {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
   border-radius: 14px;
   display: block;
   box-shadow:
@@ -598,7 +606,7 @@
   height: 4px;
   border-radius: 50%;
   background: var(--ctp-subtext0);
-  margin-top: 3px;
+  margin-top: 4px;
   flex-shrink: 0;
   transition: all 0.2s ease;
 }

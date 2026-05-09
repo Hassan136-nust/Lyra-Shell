@@ -7,6 +7,8 @@ use std::collections::HashMap;
 #[cfg(target_os = "windows")]
 use windows::Win32::Foundation::*;
 #[cfg(target_os = "windows")]
+use windows::core::PWSTR;
+#[cfg(target_os = "windows")]
 use windows::Win32::UI::WindowsAndMessaging::*;
 #[cfg(target_os = "windows")]
 use windows::Win32::System::Threading::*;
@@ -24,6 +26,7 @@ pub struct WindowInfo {
     pub hwnd: i64,
     pub title: String,
     pub process_name: String,
+    pub process_path: String,
     pub pid: u32,
 }
 
@@ -61,6 +64,23 @@ fn get_process_name_from_pid(pid: u32) -> String {
             }
         }
         String::from("unknown")
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn get_process_path_from_pid(pid: u32) -> String {
+    unsafe {
+        let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+        if let Ok(handle) = handle {
+            let mut buffer = [0u16; 1024];
+            let mut size = buffer.len() as u32;
+            let result = QueryFullProcessImageNameW(handle, PROCESS_NAME_FORMAT(0), PWSTR(buffer.as_mut_ptr()), &mut size);
+            let _ = CloseHandle(handle);
+            if result.is_ok() && size > 0 {
+                return String::from_utf16_lossy(&buffer[..size as usize]);
+            }
+        }
+        String::new()
     }
 }
 
@@ -108,11 +128,13 @@ unsafe extern "system" fn enum_windows_callback(hwnd: HWND, lparam: LPARAM) -> B
     let mut pid: u32 = 0;
     GetWindowThreadProcessId(hwnd, Some(&mut pid));
     let process_name = get_process_name_from_pid(pid);
+    let process_path = get_process_path_from_pid(pid);
 
     list.push(WindowInfo {
         hwnd: hwnd.0 as usize as i64,
         title,
         process_name,
+        process_path,
         pid,
     });
 
@@ -169,11 +191,13 @@ fn get_active_window() -> Option<WindowInfo> {
             let mut pid: u32 = 0;
             GetWindowThreadProcessId(hwnd, Some(&mut pid));
             let process_name = get_process_name_from_pid(pid);
+            let process_path = get_process_path_from_pid(pid);
 
             Some(WindowInfo {
                 hwnd: hwnd.0 as usize as i64,
                 title,
                 process_name,
+                process_path,
                 pid,
             })
         }
@@ -318,6 +342,47 @@ fn launch_app(path: String) -> Result<String, String> {
         .status()
         .map_err(|e| format!("failed to launch: {e}"))?;
     Ok("launched".into())
+}
+
+#[tauri::command]
+fn get_app_icon(process_path: String) -> Result<String, String> {
+    #[cfg(target_os = "windows")]
+    {
+        if process_path.trim().is_empty() {
+            return Err("empty process path".to_string());
+        }
+
+        let escaped = process_path.replace('\'', "''");
+        let script = format!(
+            "Add-Type -AssemblyName System.Drawing; \
+            $icon=[System.Drawing.Icon]::ExtractAssociatedIcon('{escaped}'); \
+            if($null -eq $icon){{exit 1}}; \
+            $bmp=$icon.ToBitmap(); \
+            $ms=New-Object System.IO.MemoryStream; \
+            $bmp.Save($ms,[System.Drawing.Imaging.ImageFormat]::Png); \
+            [Convert]::ToBase64String($ms.ToArray())"
+        );
+
+        let output = Command::new("powershell")
+            .args(["-NoProfile", "-Command", &script])
+            .output()
+            .map_err(|e| format!("failed to extract icon: {e}"))?;
+
+        if !output.status.success() {
+            return Err("icon extraction command failed".to_string());
+        }
+
+        let b64 = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if b64.is_empty() {
+            return Err("empty icon result".to_string());
+        }
+
+        Ok(format!("data:image/png;base64,{b64}"))
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("not on windows".to_string())
+    }
 }
 
 // ── WiFi Commands (Real Windows Data) ───────────────────────────
@@ -586,6 +651,7 @@ pub fn run() {
             close_window,
             get_system_info,
             launch_app,
+            get_app_icon,
             list_wifi_networks,
             connect_wifi,
             wifi_status,

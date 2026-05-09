@@ -1,5 +1,6 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion, useSpring, useMotionValue, useTransform, AnimatePresence } from 'framer-motion';
+import { invoke } from '@tauri-apps/api/core';
 import { useAppContext } from '../contexts/AppContext';
 
 /* ── SVG Icon Generator ───────────────────────────────────────── */
@@ -195,17 +196,17 @@ const DockIcon = ({ label, visual, isRunning, isActive, onClick, onContextMenu, 
     const centerX = bounds.left + bounds.width / 2;
     return value - centerX;
   });
-  const sizeTransform = useTransform(distance, [-180, 0, 180], [40, 62, 40]);
-  const yTransform = useTransform(distance, [-180, 0, 180], [0, -10, 0]);
+  const scaleTransform = useTransform(distance, [-200, 0, 200], [1, 1.22, 1]);
+  const yTransform = useTransform(distance, [-200, 0, 200], [0, -7, 0]);
 
-  const size = useSpring(sizeTransform, { mass: 0.15, stiffness: 180, damping: 18 });
+  const scale = useSpring(scaleTransform, { mass: 0.16, stiffness: 190, damping: 20 });
   const y = useSpring(yTransform, { mass: 0.15, stiffness: 180, damping: 18 });
 
   return (
     <motion.div
       className="dock-icon-wrap"
       ref={ref}
-      style={{ width: size, height: size, y }}
+      style={{ y }}
       onClick={onClick}
       onContextMenu={onContextMenu}
     >
@@ -221,8 +222,7 @@ const DockIcon = ({ label, visual, isRunning, isActive, onClick, onContextMenu, 
           src={visual.svg}
           alt={label}
           style={{
-            width: size,
-            height: size,
+            scale,
           }}
           draggable={false}
           whileTap={{ scale: 0.85 }}
@@ -231,8 +231,7 @@ const DockIcon = ({ label, visual, isRunning, isActive, onClick, onContextMenu, 
         <motion.div
           className="dock-icon"
           style={{
-            width: size,
-            height: size,
+            scale,
             background: visual.bg,
             color: visual.color || 'white',
           }}
@@ -254,6 +253,8 @@ const DockIcon = ({ label, visual, isRunning, isActive, onClick, onContextMenu, 
 const Dock = () => {
   const { runningApps, activeWindow, focusWindow, closeWindow, runAction } = useAppContext();
   const [contextMenu, setContextMenu] = useState(null);
+  const [realIcons, setRealIcons] = useState({});
+  const iconRequestsRef = useRef(new Set());
   const mouseX = useMotionValue(9999);
 
   // Filter out duplicates and get unique running apps by process name
@@ -273,11 +274,54 @@ const Dock = () => {
       uniqueRunning.push(app);
     }
   }
+  uniqueRunning.sort((a, b) => {
+    const aName = (a.process_name || '').toLowerCase();
+    const bName = (b.process_name || '').toLowerCase();
+    if (aName !== bName) return aName.localeCompare(bName);
+    return (a.pid || 0) - (b.pid || 0);
+  });
 
   const handleContextMenu = (e, app) => {
     e.preventDefault();
     setContextMenu({ x: e.clientX, y: e.clientY, app });
   };
+
+  useEffect(() => {
+    const candidates = Array.from(
+      new Set(
+        runningApps
+          .map((app) => app?.process_path)
+          .filter((path) => typeof path === 'string' && path.trim().length > 0),
+      ),
+    );
+
+    candidates.forEach((processPath) => {
+      if (realIcons[processPath] || iconRequestsRef.current.has(processPath)) {
+        return;
+      }
+      iconRequestsRef.current.add(processPath);
+
+      invoke('get_app_icon', { processPath })
+        .then((iconDataUrl) => {
+          if (typeof iconDataUrl === 'string' && iconDataUrl.startsWith('data:image/')) {
+            setRealIcons((prev) => ({ ...prev, [processPath]: iconDataUrl }));
+          }
+        })
+        .catch(() => {})
+        .finally(() => {
+          iconRequestsRef.current.delete(processPath);
+        });
+    });
+  }, [runningApps, realIcons]);
+
+  const explorerApp = runningApps.find((a) => a.process_name?.toLowerCase() === 'explorer.exe');
+  const terminalApp = runningApps.find((a) =>
+    ['windowsterminal.exe', 'cmd.exe', 'powershell.exe'].includes(a.process_name?.toLowerCase()),
+  );
+  const browserApp = runningApps.find((a) =>
+    ['chrome.exe', 'msedge.exe', 'firefox.exe', 'brave.exe'].includes(a.process_name?.toLowerCase()),
+  );
+  const settingsApp = runningApps.find((a) => a.process_name?.toLowerCase() === 'systemsettings.exe');
 
   return (
     <>
@@ -291,24 +335,40 @@ const Dock = () => {
           onMouseLeave={() => mouseX.set(9999)}
         >
           {/* Pinned Apps */}
-          {pinnedApps.map((app) => (
-            <DockIcon
-              key={app.name}
-              label={app.name}
-              visual={app}
-              isRunning={false}
-              isActive={false}
-              onClick={() => runAction(app.action)}
-              mouseX={mouseX}
-            />
-          ))}
+          {pinnedApps.map((app) => {
+            const match =
+              app.action === 'open_explorer'
+                ? explorerApp
+                : app.action === 'open_terminal'
+                  ? terminalApp
+                  : app.action === 'open_browser'
+                    ? browserApp
+                    : settingsApp;
+
+            const liveIcon = match?.process_path ? realIcons[match.process_path] : null;
+            const visual = liveIcon ? { ...app, svg: liveIcon } : app;
+
+            return (
+              <DockIcon
+                key={app.name}
+                label={app.name}
+                visual={visual}
+                isRunning={false}
+                isActive={false}
+                onClick={() => runAction(app.action)}
+                mouseX={mouseX}
+              />
+            );
+          })}
 
           {/* Separator */}
           {uniqueRunning.length > 0 && <div className="dock-separator" />}
 
           {/* Running Apps */}
           {uniqueRunning.map((app) => {
-            const visual = getAppVisual(app.process_name);
+            const fallbackVisual = getAppVisual(app.process_name);
+            const realIcon = app.process_path ? realIcons[app.process_path] : null;
+            const visual = realIcon ? { ...fallbackVisual, svg: realIcon } : fallbackVisual;
             const isActive = activeWindow?.pid === app.pid;
             const displayName = app.title?.length > 30 ? app.title.slice(0, 30) + '…' : app.title;
             return (
