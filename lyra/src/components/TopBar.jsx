@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppContext } from '../contexts/AppContext';
 import logo from '../../public/logo.png';
@@ -111,14 +112,25 @@ const TopBar = () => {
   const [showPowerMenu, setShowPowerMenu] = useState(false);
   const [showWifi, setShowWifi] = useState(false);
   const [showVolume, setShowVolume] = useState(false);
-  const [volume, setVolume] = useState(72);
+  const [volume, setVolume] = useState(0);
   const [mute, setMute] = useState(false);
-  const [networks] = useState([
-    { ssid: 'ArchNet', signal: 5, connected: true },
-    { ssid: 'MacFusion', signal: 4 },
-    { ssid: 'CoffeeShop', signal: 3 },
-    { ssid: 'Hidden', signal: 2 },
-  ]);
+  const [networks, setNetworks] = useState([]);
+  const [wifiStatus, setWifiStatus] = useState({ connected: false, ssid: '', signal: 0 });
+    // Fetch WiFi networks and status from Tauri backend
+    useEffect(() => {
+      if (showWifi) {
+        invoke('list_wifi_networks').then(setNetworks);
+        invoke('wifi_status').then(setWifiStatus);
+      }
+    }, [showWifi]);
+
+    // Fetch volume/mute from Tauri backend
+    useEffect(() => {
+      if (showVolume) {
+        invoke('get_volume').then(setVolume);
+        invoke('get_mute').then(setMute);
+      }
+    }, [showVolume]);
   const powerMenuRef = useRef(null);
   const wifiRef = useRef(null);
   const volumeRef = useRef(null);
@@ -225,18 +237,24 @@ const TopBar = () => {
                 transition={{ duration: 0.18 }}
                 style={{ position: 'absolute', top: 32, right: 0, minWidth: 240, zIndex: 300 }}
               >
-                <div style={{padding:'12px 16px 8px',borderBottom:'1px solid var(--ctp-surface1)',display:'flex',alignItems:'center',gap:8}}>
+                <div className="popover-header" style={{display:'flex',alignItems:'center',gap:8,padding:'12px 16px 8px',borderBottom:'1px solid var(--ctp-surface1)'}}>
                   <WifiIcon />
-                  <span style={{fontWeight:700,letterSpacing:1.2}}>WiFi Networks</span>
+                  <span>WiFi Networks</span>
                   <span style={{marginLeft:'auto',fontSize:11,opacity:0.7}}>powered by <span style={{color:'var(--ctp-blue)',fontWeight:600}}>Arch</span></span>
                 </div>
                 <div style={{padding:'8px 0'}}>
+                  {networks.length === 0 && <div style={{padding:'12px',textAlign:'center',opacity:0.6}}>No networks found</div>}
                   {networks.map((net) => (
-                    <div key={net.ssid} style={{display:'flex',alignItems:'center',gap:10,padding:'7px 18px',cursor:'pointer',background:net.connected?'rgba(137,180,250,0.13)':'none',borderRadius:8,margin:'2px 8px',border:net.connected?'1.5px solid var(--ctp-blue)':'1.5px solid transparent'}}>
+                    <div
+                      key={net.ssid}
+                      className={`network${net.connected ? ' connected' : ''}`}
+                      style={{display:'flex',alignItems:'center',gap:10}}
+                      onClick={() => invoke('connect_wifi', { ssid: net.ssid })}
+                    >
                       <WifiIcon />
-                      <span style={{fontWeight:net.connected?700:500,color:net.connected?'var(--ctp-blue)':'var(--ctp-text)'}}>{net.ssid}</span>
-                      <span style={{marginLeft:'auto',fontSize:12,opacity:0.7}}>{'•'.repeat(net.signal)}</span>
-                      {net.connected && <span style={{fontSize:11,color:'var(--ctp-green)',fontWeight:600}}>Connected</span>}
+                      <span style={{ fontWeight: net.connected ? 700 : 500, color: net.connected ? 'var(--ctp-blue)' : 'var(--ctp-text)' }}>{net.ssid}</span>
+                      <span style={{ marginLeft: 'auto', fontSize: 12, opacity: 0.7 }}>{'•'.repeat(net.signal)}</span>
+                      {net.connected && <span style={{ fontSize: 11, color: 'var(--ctp-green)', fontWeight: 600 }}>Connected</span>}
                     </div>
                   ))}
                 </div>
@@ -265,18 +283,37 @@ const TopBar = () => {
                 transition={{ duration: 0.18 }}
                 style={{ position: 'absolute', top: 32, right: 0, minWidth: 220, zIndex: 300 }}
               >
-                <div style={{padding:'12px 16px 8px',borderBottom:'1px solid var(--ctp-surface1)',display:'flex',alignItems:'center',gap:8}}>
+                <div className="popover-header" style={{display:'flex',alignItems:'center',gap:8,padding:'12px 16px 8px',borderBottom:'1px solid var(--ctp-surface1)'}}>
                   <VolumeIcon />
-                  <span style={{fontWeight:700,letterSpacing:1.2}}>Volume</span>
+                  <span>Volume</span>
                   <span style={{marginLeft:'auto',fontSize:11,opacity:0.7}}>blend <span style={{color:'var(--ctp-mauve)',fontWeight:600}}>mac+arch</span></span>
                 </div>
                 <div style={{padding:'18px 24px 10px',display:'flex',flexDirection:'column',alignItems:'center',gap:12}}>
-                  <input type="range" min={0} max={100} value={volume} onChange={e => { setVolume(Number(e.target.value)); setMute(Number(e.target.value) === 0); }} style={{width:'100%',accentColor:'var(--ctp-blue)',height:4}} />
-                  <div style={{display:'flex',alignItems:'center',gap:10}}>
-                    <button onClick={() => setMute(m => !m)} style={{background:'none',border:'none',color:mute?'var(--ctp-red)':'var(--ctp-blue)',fontWeight:700,fontSize:13,cursor:'pointer',borderRadius:6,padding:'2px 10px',transition:'background 0.15s'}}>{mute ? 'Unmute' : 'Mute'}</button>
-                    <span style={{fontSize:12,opacity:0.7}}>{mute ? 'Muted' : `${volume}%`}</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={volume}
+                    onChange={e => {
+                      const v = Number(e.target.value);
+                      setVolume(v);
+                      setMute(v === 0);
+                      invoke('set_volume', { value: v });
+                    }}
+                  />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <button
+                      onClick={() => {
+                        invoke('set_mute', { value: !mute });
+                        setMute(m => !m);
+                      }}
+                      style={{ background: 'none', border: 'none', color: mute ? 'var(--ctp-red)' : 'var(--ctp-blue)', fontWeight: 700, fontSize: 13, cursor: 'pointer', borderRadius: 6, padding: '2px 10px', transition: 'background 0.15s' }}
+                    >
+                      {mute ? 'Unmute' : 'Mute'}
+                    </button>
+                    <span style={{ fontSize: 12, opacity: 0.7 }}>{mute ? 'Muted' : `${volume}%`}</span>
                   </div>
-                  <div style={{fontSize:11,opacity:0.6}}>Output: <span style={{color:'var(--ctp-blue)'}}>Speakers</span></div>
+                  <div style={{ fontSize: 11, opacity: 0.6 }}>Output: <span style={{ color: 'var(--ctp-blue)' }}>Speakers</span></div>
                 </div>
               </motion.div>
             )}
