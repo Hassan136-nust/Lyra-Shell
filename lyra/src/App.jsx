@@ -10,7 +10,7 @@ function App() {
         {/* Wallpaper Background */}
         <div className="lyra-wallpaper">
           <img
-            src="/wallpaper.png"
+            src="/wallpaper1.png"
             alt="Desktop"
             className="lyra-wallpaper-img"
             onError={(e) => {
