@@ -166,10 +166,24 @@ const DockIcon = ({ label, visual, isRunning, isActive, onClick, onContextMenu, 
 /* ── Dock Component ───────────────────────────────────────────── */
 const Dock = () => {
   const { runningApps, activeWindow, focusWindow, closeWindow, runAction } = useAppContext();
-  const [contextMenu, setContextMenu] = useState(null);
   const [realIcons, setRealIcons] = useState({});
   const iconRequestsRef = useRef(new Set());
-  const mouseX = useMotionValue(9999);
+  const mouseX = useMotionValue(Infinity);
+  const [contextMenu, setContextMenu] = useState(null);
+
+  const [isHovered, setIsHovered] = useState(false);
+  const hoverTimeout = useRef(null);
+
+  const handleMouseEnter = () => {
+    clearTimeout(hoverTimeout.current);
+    setIsHovered(true);
+  };
+
+  const handleMouseLeave = () => {
+    hoverTimeout.current = setTimeout(() => {
+      setIsHovered(false);
+    }, 300);
+  };
 
   // Filter out duplicates and get unique running apps by process name
   const uniqueRunning = [];
@@ -239,74 +253,86 @@ const Dock = () => {
 
   return (
     <>
-      <div className="dock-container">
+      <div
+        className="dock-wrapper"
+        onMouseLeave={() => {
+          handleMouseLeave();
+          mouseX.set(Infinity);
+        }}
+      >
+        <div className="dock-trigger" onMouseEnter={handleMouseEnter} />
         <motion.div
-          className="dock-bar"
-          initial={{ y: 80, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.2, ease: 'easeOut' }}
-          onMouseMove={(e) => mouseX.set(e.clientX)}
-          onMouseLeave={() => mouseX.set(9999)}
+          className="dock-animator"
+          initial={{ y: 150 }}
+          animate={{ y: isHovered ? 0 : 150 }}
+          transition={{ type: "tween", ease: [0.16, 1, 0.3, 1], duration: 0.45 }}
+          onMouseEnter={handleMouseEnter}
         >
-          {/* Pinned Apps */}
-          {pinnedApps.map((app) => {
-            const match =
-              app.action === 'open_explorer'
-                ? explorerApp
-                : app.action === 'open_terminal'
-                  ? terminalApp
-                  : app.action === 'open_browser'
-                    ? browserApp
-                    : settingsApp;
+          <div className="dock-container">
+            <motion.div
+              className="dock-bar"
+              onMouseMove={(e) => mouseX.set(e.clientX)}
+              layout
+            >
+              {/* Pinned Apps */}
+              {pinnedApps.map((app) => {
+                const match =
+                  app.action === 'open_explorer'
+                    ? explorerApp
+                    : app.action === 'open_terminal'
+                      ? terminalApp
+                      : app.action === 'open_browser'
+                        ? browserApp
+                        : settingsApp;
 
-            const liveIcon = match?.process_path ? realIcons[match.process_path] : null;
-            const visual = liveIcon ? { ...app, svg: liveIcon } : app;
+                const liveIcon = match?.process_path ? realIcons[match.process_path] : null;
+                const visual = liveIcon ? { ...app, svg: liveIcon } : app;
 
-            return (
+                return (
+                  <DockIcon
+                    key={app.name}
+                    label={app.name}
+                    visual={visual}
+                    isRunning={false}
+                    isActive={false}
+                    onClick={() => runAction(app.action)}
+                    mouseX={mouseX}
+                  />
+                );
+              })}
+
+              {/* Separator */}
+              {uniqueRunning.length > 0 && <div className="dock-separator" />}
+
+              {/* Running Apps */}
+              {uniqueRunning.map((app) => {
+                const fallbackVisual = getAppVisual(app.process_name);
+                const realIcon = app.process_path ? realIcons[app.process_path] : null;
+                const visual = realIcon ? { ...fallbackVisual, svg: realIcon } : fallbackVisual;
+                const isActive = activeWindow?.pid === app.pid;
+                const displayName = app.title?.length > 30 ? app.title.slice(0, 30) + '…' : app.title;
+                return (
+                  <DockIcon
+                    key={app.hwnd}
+                    label={displayName || app.process_name}
+                    visual={visual}
+                    isRunning={true}
+                    isActive={isActive}
+                    onClick={() => focusWindow(app.hwnd)}
+                    onContextMenu={(e) => handleContextMenu(e, app)}
+                    mouseX={mouseX}
+                  />
+                );
+              })}
+
+              {/* Separator before trash */}
+              <div className="dock-separator" />
+
+              {/* Trash */}
               <DockIcon
-                key={app.name}
-                label={app.name}
-                visual={visual}
-                isRunning={false}
-                isActive={false}
-                onClick={() => runAction(app.action)}
-                mouseX={mouseX}
-              />
-            );
-          })}
-
-          {/* Separator */}
-          {uniqueRunning.length > 0 && <div className="dock-separator" />}
-
-          {/* Running Apps */}
-          {uniqueRunning.map((app) => {
-            const fallbackVisual = getAppVisual(app.process_name);
-            const realIcon = app.process_path ? realIcons[app.process_path] : null;
-            const visual = realIcon ? { ...fallbackVisual, svg: realIcon } : fallbackVisual;
-            const isActive = activeWindow?.pid === app.pid;
-            const displayName = app.title?.length > 30 ? app.title.slice(0, 30) + '…' : app.title;
-            return (
-              <DockIcon
-                key={app.hwnd}
-                label={displayName || app.process_name}
-                visual={visual}
-                isRunning={true}
-                isActive={isActive}
-                onClick={() => focusWindow(app.hwnd)}
-                onContextMenu={(e) => handleContextMenu(e, app)}
-                mouseX={mouseX}
-              />
-            );
-          })}
-
-          {/* Separator before trash */}
-          <div className="dock-separator" />
-
-          {/* Trash */}
-          <DockIcon
-            label="Trash"
-            visual={{
-              svg: createSvgIcon(`<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+                label="Trash"
+                visual={{
+                  svg: createSvgIcon(`<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
                 <rect width="64" height="64" rx="8" fill="#666"/>
                 <rect x="14" y="16" width="36" height="4" rx="1" fill="#999"/>
                 <path d="M18 24 L46 24 L44 52 Q44 54 42 54 L22 54 Q20 54 20 52 Z" fill="#888" stroke="#999" stroke-width="0.5"/>
@@ -314,12 +340,14 @@ const Dock = () => {
                 <line x1="32" y1="28" x2="32" y2="48" stroke="#aaa" stroke-width="1"/>
                 <line x1="38" y1="28" x2="38" y2="48" stroke="#aaa" stroke-width="1"/>
               </svg>`)
-            }}
-            isRunning={false}
-            isActive={false}
-            onClick={() => { }}
-            mouseX={mouseX}
-          />
+                }}
+                isRunning={false}
+                isActive={false}
+                onClick={() => { }}
+                mouseX={mouseX}
+              />
+            </motion.div>
+          </div>
         </motion.div>
       </div>
 

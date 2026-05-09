@@ -124,7 +124,7 @@ const RealtimeTray = () => {
               <div className="popover-header popover-header-wifi">
                 <WifiIcon />
                 <span>WiFi Networks</span>
-                <span className="popover-powered">powered by <span>Arch</span></span>
+                <span className="popover-powered">powered by <span>Lyra</span></span>
               </div>
               {wifiStatus?.connected && (
                 <div className="wifi-current">
@@ -180,8 +180,8 @@ const RealtimeTray = () => {
             <motion.div className="popover popover-volume" initial={{ opacity: 0, y: 8, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8, scale: 0.98 }} transition={{ duration: 0.18 }} style={{ position: 'absolute', top: 34, right: 0, width: 350, zIndex: 300 }}>
               <div className="popover-header popover-header-volume">
                 <VolumeIcon />
-                <span>Volume blend</span>
-                <span className="popover-powered">mac + arch</span>
+                <span>Volume</span>
+                <span className="popover-powered">Lyra</span>
               </div>
               <div className="volume-popover-body">
                 <input
