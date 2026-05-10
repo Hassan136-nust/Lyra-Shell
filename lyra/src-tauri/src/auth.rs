@@ -19,33 +19,14 @@ use windows::Security::Credentials::UI::{
     UserConsentVerificationResult, UserConsentVerifier,
 };
 #[cfg(target_os = "windows")]
-use windows::Win32::Foundation::{BOOL, HWND, LPARAM};
+use windows::Win32::Foundation::HWND;
 #[cfg(target_os = "windows")]
 use windows::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, GetWindowTextLengthW, GetWindowTextW, IsWindowVisible, SetForegroundWindow,
-    SetWindowPos, HWND_TOPMOST, SWP_NOSIZE, SWP_SHOWWINDOW,
+    SetForegroundWindow, SetWindowPos, HWND_TOPMOST, SWP_NOSIZE, SWP_SHOWWINDOW,
     FindWindowW, FindWindowExW, ShowWindow, SW_HIDE, SW_SHOW, MoveWindow, GetWindowRect
 };
 
-#[cfg(target_os = "windows")]
-fn toggle_taskbar(show: bool) {
-    unsafe {
-        // Main taskbar
-        if let Ok(taskbar) = FindWindowW(
-            windows::core::w!("Shell_TrayWnd"),
-            windows::core::PCWSTR::null(),
-        ) {
-            let _ = ShowWindow(taskbar, if show { SW_SHOW } else { SW_HIDE });
-        }
-        
-        // Secondary taskbars
-        let mut sec = FindWindowExW(HWND::default(), HWND::default(), windows::core::w!("Shell_SecondaryTrayWnd"), windows::core::PCWSTR::null());
-        while let Ok(sec_hwnd) = sec {
-            let _ = ShowWindow(sec_hwnd, if show { SW_SHOW } else { SW_HIDE });
-            sec = FindWindowExW(HWND::default(), sec_hwnd, windows::core::w!("Shell_SecondaryTrayWnd"), windows::core::PCWSTR::null());
-        }
-    }
-}
+
 
 #[cfg(target_os = "windows")]
 fn bring_windows_security_to_front() -> bool {
@@ -54,21 +35,21 @@ fn bring_windows_security_to_front() -> bool {
             windows::core::PCWSTR::null(),
             windows::core::w!("Windows Security"),
         );
-        if let Ok(h) = hwnd {
-            if !h.0.is_null() {
+        if let Ok(handle) = hwnd {
+            if !handle.0.is_null() {
                 let mut rect = windows::Win32::Foundation::RECT::default();
-                let _ = windows::Win32::UI::WindowsAndMessaging::GetWindowRect(h, &mut rect);
+                let _ = windows::Win32::UI::WindowsAndMessaging::GetWindowRect(handle, &mut rect);
                 let w = rect.right - rect.left;
-                let h = rect.bottom - rect.top;
+                let height = rect.bottom - rect.top;
                 
-                let _ = windows::Win32::UI::WindowsAndMessaging::MoveWindow(h, 0, 0, w, h, true);
+                let _ = windows::Win32::UI::WindowsAndMessaging::MoveWindow(handle, 0, 0, w, height, true);
                 let _ = windows::Win32::UI::WindowsAndMessaging::SetWindowPos(
-                    h,
+                    handle,
                     windows::Win32::UI::WindowsAndMessaging::HWND_TOPMOST,
                     0, 0, 0, 0,
                     windows::Win32::UI::WindowsAndMessaging::SWP_NOSIZE | windows::Win32::UI::WindowsAndMessaging::SWP_SHOWWINDOW,
                 );
-                let _ = windows::Win32::UI::WindowsAndMessaging::SetForegroundWindow(h);
+                let _ = windows::Win32::UI::WindowsAndMessaging::SetForegroundWindow(handle);
                 return true;
             }
         }
@@ -184,7 +165,6 @@ pub fn request_biometric_auth(app_handle: tauri::AppHandle) -> Result<(), String
                 let _ = win.set_always_on_top(false);
             }
 
-            toggle_taskbar(false);
             let message = HSTRING::from("Unlock Lyra");
             verified = match UserConsentVerifier::RequestVerificationAsync(&message) {
                 Ok(operation) => {
@@ -198,8 +178,6 @@ pub fn request_biometric_auth(app_handle: tauri::AppHandle) -> Result<(), String
                             Err(_) => break,
                         }
                     }
-
-                    toggle_taskbar(true);
 
                     operation
                         .GetResults()
