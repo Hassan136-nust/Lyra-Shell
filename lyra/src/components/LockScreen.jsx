@@ -34,7 +34,7 @@ const ArrowRightIcon = () => (
 );
 
 /* ── Particle Background ──────────────────────────────────────── */
-const PARTICLE_COUNT = 60;
+const PARTICLE_COUNT = 150;
 
 const createParticles = () =>
     Array.from({ length: PARTICLE_COUNT }, (_, i) => ({
@@ -58,6 +58,14 @@ const LockScreen = ({ isLocked, onUnlock, biometricAvailable }) => {
     const [time, setTime] = useState(new Date());
     const [unlocking, setUnlocking] = useState(false);
     const [shakeKey, setShakeKey] = useState(0);
+    const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+
+    const handleMouseMove = (e) => {
+        setMousePos({
+            x: ((e.clientX / window.innerWidth) - 0.5) * 40,
+            y: ((e.clientY / window.innerHeight) - 0.5) * 40,
+        });
+    };
     const [showAuthCard, setShowAuthCard] = useState(false);
     const inputRef = useRef(null);
     const particles = useRef(createParticles());
@@ -227,6 +235,7 @@ const LockScreen = ({ isLocked, onUnlock, biometricAvailable }) => {
             {isLocked && (
                 <motion.div
                     className="lockscreen"
+                    onMouseMove={handleMouseMove}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: unlocking ? 0 : 1 }}
                     exit={{ opacity: 0, scale: 1.05, filter: 'blur(20px)' }}
@@ -234,8 +243,22 @@ const LockScreen = ({ isLocked, onUnlock, biometricAvailable }) => {
                 >
                     {/* ── Animated Background ── */}
                     <div className="lockscreen-bg">
-                        <div className="lockscreen-gradient" />
-                        <div className="lockscreen-particles">
+                        <motion.div
+                            className="lockscreen-gradient"
+                            animate={{
+                                x: mousePos.x * 2,
+                                y: mousePos.y * 2
+                            }}
+                            transition={{ type: "spring", stiffness: 35, damping: 25 }}
+                        />
+                        <motion.div
+                            className="lockscreen-particles"
+                            animate={{
+                                x: mousePos.x * -1.5,
+                                y: mousePos.y * -1.5
+                            }}
+                            transition={{ type: "spring", stiffness: 45, damping: 25 }}
+                        >
                             {particles.current.map((p) => (
                                 <div
                                     key={p.id}
@@ -251,7 +274,7 @@ const LockScreen = ({ isLocked, onUnlock, biometricAvailable }) => {
                                     }}
                                 />
                             ))}
-                        </div>
+                        </motion.div>
                         <div className="lockscreen-aurora" />
                     </div>
 

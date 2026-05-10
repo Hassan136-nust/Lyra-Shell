@@ -1212,19 +1212,21 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   overflow: hidden;
-  background-color: var(--ctp-crust);
+  background-color: rgba(17, 17, 27, 0.2);
+  backdrop-filter: blur(50px) saturate(140%) brightness(0.75);
+  -webkit-backdrop-filter: blur(50px) saturate(140%) brightness(0.75);
   pointer-events: all;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
-/* ── Background layers ── */
+/* ── Background layers (Restored for interactive particles) ── */
 .lockscreen-bg {
   position: absolute;
   inset: 0;
   z-index: 0;
-  background: linear-gradient(135deg, #181926 0%, #1e1e2e 50%, #11111b 100%);
+  pointer-events: none;
 }
 
 .lockscreen-gradient {
@@ -1315,8 +1317,6 @@
   flex-direction: column;
   align-items: center;
   width: 100%;
-  padding-top: 8vh;
-  padding-bottom: 2vh;
 }
 
 /* ── Clock ── */
@@ -1326,28 +1326,29 @@
 }
 
 .lockscreen-time {
-  font-size: 110px;
-  font-weight: 200;
+  font-size: 84px;
+  font-weight: 500;
   color: rgba(255, 255, 255, 0.95);
   line-height: 1;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  text-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+  font-family: "Fira Code", "JetBrains Mono", "Hack", var(--font-sans, monospace);
+  text-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
   letter-spacing: -2px;
 }
 
 .lockscreen-date {
-  font-size: 22px;
+  font-size: 16px;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.85);
-  margin-top: 6px;
+  color: rgba(255, 255, 255, 0.7);
+  margin-top: 8px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  font-family: "Cantarell", "Fira Code", "JetBrains Mono", "Hack", var(--font-sans, monospace);
   text-shadow: 0 2px 14px rgba(0, 0, 0, 0.3);
 }
 
 .lockscreen-auth-card {
   position: relative;
-  /* Push it down far enough so that it isn't covered by the unmovable 
-     Windows Security dialog that appears in the true center */
-  margin-top: 250px;
+  margin-top: 32px;
   width: 360px;
   max-height: 80vh;
   overflow-y: auto;
