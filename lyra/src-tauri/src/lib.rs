@@ -1477,6 +1477,9 @@ pub fn run() {
                 // Start background thread listening for Win+L
                 start_hotkey_listener(app.handle().clone());
                 
+                // Hide the taskbar visually by setting its alpha to 0 (transparency)
+                lockdown::set_taskbar_visible(false);
+                
                 // Mount the Low-Level OS hook on the main kernel thread to trap the Start Menu
                 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
                 use windows::Win32::UI::WindowsAndMessaging::{SetWindowsHookExW, WH_KEYBOARD_LL};
