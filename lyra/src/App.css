@@ -1308,9 +1308,9 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20px;
+  gap: 18px;
   width: 100%;
-  max-width: 380px;
+  max-width: 460px;
   padding: 0 24px;
 }
 
@@ -1321,13 +1321,13 @@
 }
 
 .lockscreen-time {
-  font-size: 72px;
+  font-size: 76px;
   font-weight: 200;
-  letter-spacing: -2px;
+  letter-spacing: 0;
   color: var(--ctp-text);
   line-height: 1;
   font-family: var(--font-sans);
-  text-shadow: 0 2px 20px rgba(0, 0, 0, 0.3);
+  text-shadow: 0 8px 34px rgba(0, 0, 0, 0.42);
 }
 
 .lockscreen-date {
@@ -1335,23 +1335,46 @@
   font-weight: 400;
   color: var(--ctp-subtext0);
   margin-top: 6px;
-  letter-spacing: 0.5px;
+  letter-spacing: 0;
+}
+
+.lockscreen-auth-card {
+  width: min(100%, 430px);
+  padding: 18px;
+  border: 1px solid rgba(205, 214, 244, 0.16);
+  border-radius: 24px;
+  background:
+    linear-gradient(145deg, rgba(30, 30, 46, 0.82), rgba(17, 17, 27, 0.72)),
+    radial-gradient(circle at 18% 8%, rgba(166, 227, 161, 0.12), transparent 32%),
+    radial-gradient(circle at 90% 16%, rgba(137, 220, 235, 0.12), transparent 34%);
+  box-shadow:
+    0 28px 70px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(28px) saturate(1.35);
+  -webkit-backdrop-filter: blur(28px) saturate(1.35);
+}
+
+.lockscreen-auth-head {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 18px;
 }
 
 /* ── Avatar ── */
 .lockscreen-avatar {
   display: flex;
   justify-content: center;
-  margin: 4px 0;
 }
 
 .lockscreen-avatar-ring {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  padding: 3px;
-  background: linear-gradient(135deg, var(--ctp-blue), var(--ctp-mauve));
-  animation: lockscreen-ring-glow 3s ease-in-out infinite alternate;
+  width: 58px;
+  height: 58px;
+  border-radius: 18px;
+  padding: 1px;
+  background: linear-gradient(135deg, var(--ctp-blue), var(--ctp-green), var(--ctp-mauve));
+  box-shadow: 0 10px 30px rgba(137, 180, 250, 0.18);
 }
 
 @keyframes lockscreen-ring-glow {
@@ -1367,20 +1390,21 @@
 .lockscreen-avatar-inner {
   width: 100%;
   height: 100%;
-  border-radius: 50%;
-  background: var(--ctp-surface0);
+  border-radius: 17px;
+  background: rgba(24, 24, 37, 0.9);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--ctp-subtext0);
+  color: var(--ctp-text);
 }
 
 /* ── Greeting ── */
 .lockscreen-greeting {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   gap: 2px;
+  min-width: 0;
 }
 
 .lockscreen-greeting-label {
@@ -1390,10 +1414,47 @@
 }
 
 .lockscreen-greeting-name {
-  font-size: 22px;
-  font-weight: 500;
+  font-size: 20px;
+  font-weight: 700;
   color: var(--ctp-text);
   text-transform: capitalize;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 190px;
+}
+
+.lockscreen-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid rgba(166, 173, 200, 0.18);
+  border-radius: 999px;
+  background: rgba(49, 50, 68, 0.42);
+  color: var(--ctp-subtext0);
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.lockscreen-status-pill span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ctp-overlay1);
+}
+
+.lockscreen-status-pill.active {
+  border-color: rgba(166, 227, 161, 0.28);
+  background: rgba(166, 227, 161, 0.1);
+  color: var(--ctp-green);
+}
+
+.lockscreen-status-pill.active span {
+  background: var(--ctp-green);
+  box-shadow: 0 0 0 4px rgba(166, 227, 161, 0.12);
 }
 
 /* ── Password Form ── */
@@ -1405,12 +1466,12 @@
   display: flex;
   align-items: center;
   width: 100%;
-  height: 44px;
-  border-radius: 12px;
-  background: rgba(49, 50, 68, 0.6);
+  height: 48px;
+  border-radius: 14px;
+  background: rgba(17, 17, 27, 0.54);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(137, 180, 250, 0.15);
+  border: 1px solid rgba(205, 214, 244, 0.14);
   overflow: hidden;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
@@ -1444,11 +1505,11 @@
   align-items: center;
   justify-content: center;
   width: 40px;
-  height: 36px;
-  margin-right: 4px;
+  height: 40px;
+  margin-right: 5px;
   border: none;
-  border-radius: 8px;
-  background: rgba(137, 180, 250, 0.15);
+  border-radius: 12px;
+  background: rgba(137, 180, 250, 0.18);
   color: var(--ctp-blue);
   cursor: pointer;
   transition: background 0.15s, transform 0.1s;
@@ -1490,6 +1551,11 @@
   color: var(--ctp-red);
   text-align: center;
   font-weight: 400;
+  margin-top: 12px;
+  padding: 9px 12px;
+  border: 1px solid rgba(243, 139, 168, 0.2);
+  border-radius: 12px;
+  background: rgba(243, 139, 168, 0.08);
 }
 
 /* ── Fingerprint Section ── */
@@ -1497,41 +1563,84 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
   width: 100%;
 }
 
-.lockscreen-fingerprint-btn {
+.lockscreen-fingerprint-status {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
-  padding: 24px 32px;
-  border: 1px solid rgba(137, 180, 250, 0.15);
-  border-radius: 16px;
-  background: rgba(49, 50, 68, 0.4);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  gap: 18px;
+  padding: 26px 28px 22px;
+  border: 1px solid rgba(137, 220, 235, 0.24);
+  border-radius: 20px;
+  background:
+    linear-gradient(160deg, rgba(49, 50, 68, 0.58), rgba(24, 24, 37, 0.72)),
+    radial-gradient(circle at 50% 0%, rgba(137, 220, 235, 0.16), transparent 52%);
   color: var(--ctp-subtext1);
   font-family: var(--font-sans);
   font-size: 14px;
-  cursor: pointer;
+  cursor: default;
   transition: background 0.2s, border-color 0.2s, color 0.2s;
+  min-width: 100%;
+  min-height: 202px;
+  justify-content: center;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
-.lockscreen-fingerprint-btn:hover:not(:disabled) {
-  background: rgba(49, 50, 68, 0.6);
-  border-color: rgba(137, 180, 250, 0.3);
+.lockscreen-fingerprint-status {
   color: var(--ctp-text);
 }
 
-.lockscreen-fingerprint-btn:disabled {
-  cursor: default;
+.lockscreen-scanner {
+  position: relative;
+  width: 116px;
+  height: 116px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lockscreen-scanner-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 28px;
+  border: 1px solid rgba(137, 220, 235, 0.28);
+  animation: lockscreen-scanner-ring 1.9s ease-in-out infinite;
+}
+
+.lockscreen-scanner-ring.ring-two {
+  inset: 12px;
+  border-color: rgba(166, 227, 161, 0.24);
+  animation-delay: 0.22s;
+}
+
+.lockscreen-scanner-ring.ring-three {
+  inset: 24px;
+  border-color: rgba(203, 166, 247, 0.24);
+  animation-delay: 0.44s;
+}
+
+@keyframes lockscreen-scanner-ring {
+  0%,
+  100% {
+    transform: scale(0.96);
+    opacity: 0.55;
+  }
+
+  50% {
+    transform: scale(1.04);
+    opacity: 1;
+  }
 }
 
 .lockscreen-fingerprint-icon {
+  position: relative;
+  z-index: 1;
   color: var(--ctp-blue);
   transition: color 0.2s;
+  filter: drop-shadow(0 10px 22px rgba(137, 180, 250, 0.28));
 }
 
 .lockscreen-fingerprint-icon.scanning {
@@ -1552,16 +1661,36 @@
   }
 }
 
+.lockscreen-fingerprint-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+}
+
+.lockscreen-fingerprint-copy span {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--ctp-text);
+}
+
+.lockscreen-fingerprint-copy small {
+  font-size: 12px;
+  color: var(--ctp-subtext0);
+}
+
 /* ── Mode Switcher ── */
 .lockscreen-switch-mode {
   display: flex;
   align-items: center;
   justify-content: center;
+  min-height: 32px;
   padding: 6px 12px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--ctp-overlay1);
+  border: 1px solid rgba(166, 173, 200, 0.12);
+  border-radius: 999px;
+  background: rgba(17, 17, 27, 0.22);
+  color: var(--ctp-subtext0);
   font-family: var(--font-sans);
   font-size: 12px;
   cursor: pointer;
@@ -1569,6 +1698,8 @@
 }
 
 .lockscreen-switch-mode:hover:not(:disabled) {
+  border-color: rgba(137, 180, 250, 0.26);
+  background: rgba(137, 180, 250, 0.08);
   color: var(--ctp-blue);
 }
 
@@ -1587,12 +1718,42 @@
   align-items: center;
   gap: 8px;
   font-size: 11px;
-  color: var(--ctp-overlay0);
-  letter-spacing: 1px;
+  color: var(--ctp-overlay1);
+  letter-spacing: 0;
   text-transform: uppercase;
   z-index: 1;
 }
 
 .lockscreen-hint-sep {
   opacity: 0.4;
+}
+
+@media (max-width: 520px) {
+  .lockscreen-content {
+    max-width: 100%;
+    padding: 0 16px;
+  }
+
+  .lockscreen-time {
+    font-size: 58px;
+  }
+
+  .lockscreen-auth-card {
+    border-radius: 20px;
+    padding: 14px;
+  }
+
+  .lockscreen-auth-head {
+    grid-template-columns: 56px minmax(0, 1fr);
+  }
+
+  .lockscreen-status-pill {
+    grid-column: 1 / -1;
+    justify-self: center;
+  }
+
+  .lockscreen-fingerprint-status {
+    min-height: 184px;
+    padding: 22px 18px;
+  }
 }

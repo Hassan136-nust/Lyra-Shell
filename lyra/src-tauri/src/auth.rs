@@ -6,12 +6,74 @@
 use std::ffi::OsStr;
 #[cfg(target_os = "windows")]
 use std::os::windows::ffi::OsStrExt;
+
 #[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
+use std::time::Duration;
 
-use std::process::Command;
+#[cfg(target_os = "windows")]
+use windows::core::HSTRING;
+#[cfg(target_os = "windows")]
+use windows::Foundation::AsyncStatus;
+#[cfg(target_os = "windows")]
+use windows::Security::Credentials::UI::{
+    UserConsentVerificationResult, UserConsentVerifier, UserConsentVerifierAvailability,
+};
+#[cfg(target_os = "windows")]
+use windows::Win32::Foundation::{BOOL, HWND, LPARAM};
+#[cfg(target_os = "windows")]
+use windows::Win32::UI::WindowsAndMessaging::{
+    EnumWindows, GetWindowTextLengthW, GetWindowTextW, IsWindowVisible, SetForegroundWindow,
+    SetWindowPos, HWND_TOPMOST, SWP_NOMOVE, SWP_NOSIZE, SWP_SHOWWINDOW,
+};
 
-const CREATE_NO_WINDOW: u32 = 0x08000000;
+#[cfg(target_os = "windows")]
+unsafe extern "system" fn bring_windows_security_callback(hwnd: HWND, lparam: LPARAM) -> BOOL {
+    if !IsWindowVisible(hwnd).as_bool() {
+        return BOOL(1);
+    }
+
+    let text_len = GetWindowTextLengthW(hwnd);
+    if text_len == 0 {
+        return BOOL(1);
+    }
+
+    let mut title_buf = vec![0u16; (text_len + 1) as usize];
+    let actual_len = GetWindowTextW(hwnd, &mut title_buf);
+    if actual_len == 0 {
+        return BOOL(1);
+    }
+
+    let title = String::from_utf16_lossy(&title_buf[..actual_len as usize]);
+    if title.contains("Windows Security") {
+        let found = &mut *(lparam.0 as *mut bool);
+        *found = true;
+        let _ = SetWindowPos(
+            hwnd,
+            HWND_TOPMOST,
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW,
+        );
+        let _ = SetForegroundWindow(hwnd);
+        return BOOL(0);
+    }
+
+    BOOL(1)
+}
+
+#[cfg(target_os = "windows")]
+fn bring_windows_security_to_front() -> bool {
+    let mut found = false;
+    unsafe {
+        let _ = EnumWindows(
+            Some(bring_windows_security_callback),
+            LPARAM(&mut found as *mut bool as isize),
+        );
+    }
+    found
+}
 
 /// Return the current Windows username.
 #[tauri::command]
@@ -71,42 +133,16 @@ pub fn validate_password(password: String) -> Result<bool, String> {
 }
 
 /// Check whether Windows Hello (biometric service) is available.
-/// Uses PowerShell to correctly query the Windows API.
+/// Uses the native Windows Runtime API directly.
 #[tauri::command]
 pub async fn check_biometric_available() -> Result<bool, String> {
     #[cfg(target_os = "windows")]
     {
-        // Run synchronously but within an async Tauri command to prevent main thread blocking
-        let script = r#"
-try {
-    Add-Type -AssemblyName System.Runtime.WindowsRuntime
-    [void][Windows.Security.Credentials.UI.UserConsentVerifier,Windows.Security.Credentials.UI,ContentType=WindowsRuntime]
-    $asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
-        $_.Name -eq 'AsTask' -and
-        $_.GetParameters().Count -eq 1 -and
-        $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1'
-    })[0]
-    $asTask = $asTaskGeneric.MakeGenericMethod([Windows.Security.Credentials.UI.UserConsentVerifierAvailability])
-    $op = [Windows.Security.Credentials.UI.UserConsentVerifier]::CheckAvailabilityAsync()
-    $task = $asTask.Invoke($null, @($op))
-    $task.Wait() | Out-Null
-    $task.Result.ToString()
-} catch {
-    'DeviceNotPresent'
-}
-"#;
-        let output = Command::new("powershell")
-            .creation_flags(CREATE_NO_WINDOW)
-            .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", script])
-            .output();
-
-        match output {
-            Ok(o) => {
-                let status = String::from_utf8_lossy(&o.stdout);
-                Ok(status.trim() == "Available")
-            }
-            Err(_) => Ok(false),
-        }
+        let available = UserConsentVerifier::CheckAvailabilityAsync()
+            .and_then(|operation| operation.get())
+            .map(|status| status == UserConsentVerifierAvailability::Available)
+            .unwrap_or(false);
+        Ok(available)
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -131,32 +167,25 @@ pub fn request_biometric_auth(app_handle: tauri::AppHandle) -> Result<(), String
                 let _ = win.set_always_on_top(false);
             }
 
-            let script = r#"
-try {
-    Add-Type -AssemblyName System.Runtime.WindowsRuntime
-    [void][Windows.Security.Credentials.UI.UserConsentVerifier,Windows.Security.Credentials.UI,ContentType=WindowsRuntime]
-    $asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
-        $_.Name -eq 'AsTask' -and
-        $_.GetParameters().Count -eq 1 -and
-        $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1'
-    })[0]
-    $asTask = $asTaskGeneric.MakeGenericMethod([Windows.Security.Credentials.UI.UserConsentVerificationResult])
-    $op = [Windows.Security.Credentials.UI.UserConsentVerifier]::RequestVerificationAsync('Unlock Lyra')
-    $task = $asTask.Invoke($null, @($op))
-    $task.Wait() | Out-Null
-    $task.Result.ToString()
-} catch {
-    'Failed'
-}
-"#;
+            let message = HSTRING::from("Unlock Lyra");
+            verified = match UserConsentVerifier::RequestVerificationAsync(&message) {
+                Ok(operation) => {
+                    loop {
+                        let _ = bring_windows_security_to_front();
+                        match operation.Status() {
+                            Ok(AsyncStatus::Completed)
+                            | Ok(AsyncStatus::Canceled)
+                            | Ok(AsyncStatus::Error) => break,
+                            Ok(_) => std::thread::sleep(Duration::from_millis(80)),
+                            Err(_) => break,
+                        }
+                    }
 
-            let output = Command::new("powershell")
-                .creation_flags(CREATE_NO_WINDOW)
-                .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", script])
-                .output();
-
-            verified = match output {
-                Ok(o) => String::from_utf8_lossy(&o.stdout).trim() == "Verified",
+                    operation
+                        .GetResults()
+                        .map(|result| result == UserConsentVerificationResult::Verified)
+                        .unwrap_or(false)
+                }
                 Err(_) => false,
             };
 
