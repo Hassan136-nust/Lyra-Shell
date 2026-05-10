@@ -23,8 +23,29 @@ use windows::Win32::Foundation::{BOOL, HWND, LPARAM};
 #[cfg(target_os = "windows")]
 use windows::Win32::UI::WindowsAndMessaging::{
     EnumWindows, GetWindowTextLengthW, GetWindowTextW, IsWindowVisible, SetForegroundWindow,
-    SetWindowPos, HWND_TOPMOST, SWP_NOMOVE, SWP_NOSIZE, SWP_SHOWWINDOW,
+    SetWindowPos, HWND_TOPMOST, SWP_NOSIZE, SWP_SHOWWINDOW,
+    FindWindowW, FindWindowExW, ShowWindow, SW_HIDE, SW_SHOW, MoveWindow, GetWindowRect
 };
+
+#[cfg(target_os = "windows")]
+fn toggle_taskbar(show: bool) {
+    unsafe {
+        // Main taskbar
+        if let Ok(taskbar) = FindWindowW(
+            windows::core::w!("Shell_TrayWnd"),
+            windows::core::PCWSTR::null(),
+        ) {
+            let _ = ShowWindow(taskbar, if show { SW_SHOW } else { SW_HIDE });
+        }
+        
+        // Secondary taskbars
+        let mut sec = FindWindowExW(HWND::default(), HWND::default(), windows::core::w!("Shell_SecondaryTrayWnd"), windows::core::PCWSTR::null());
+        while let Ok(sec_hwnd) = sec {
+            let _ = ShowWindow(sec_hwnd, if show { SW_SHOW } else { SW_HIDE });
+            sec = FindWindowExW(HWND::default(), sec_hwnd, windows::core::w!("Shell_SecondaryTrayWnd"), windows::core::PCWSTR::null());
+        }
+    }
+}
 
 #[cfg(target_os = "windows")]
 unsafe extern "system" fn bring_windows_security_callback(hwnd: HWND, lparam: LPARAM) -> BOOL {
@@ -47,6 +68,13 @@ unsafe extern "system" fn bring_windows_security_callback(hwnd: HWND, lparam: LP
     if title.contains("Windows Security") {
         let found = &mut *(lparam.0 as *mut bool);
         *found = true;
+        let mut rect = windows::Win32::Foundation::RECT::default();
+        let _ = GetWindowRect(hwnd, &mut rect);
+        let w = rect.right - rect.left;
+        let h = rect.bottom - rect.top;
+        
+        // Force top-left positioning
+        let _ = MoveWindow(hwnd, 0, 0, w, h, true);
         let _ = SetWindowPos(
             hwnd,
             HWND_TOPMOST,
@@ -54,7 +82,7 @@ unsafe extern "system" fn bring_windows_security_callback(hwnd: HWND, lparam: LP
             0,
             0,
             0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW,
+            SWP_NOSIZE | SWP_SHOWWINDOW,
         );
         let _ = SetForegroundWindow(hwnd);
         return BOOL(0);
@@ -167,6 +195,7 @@ pub fn request_biometric_auth(app_handle: tauri::AppHandle) -> Result<(), String
                 let _ = win.set_always_on_top(false);
             }
 
+            toggle_taskbar(false);
             let message = HSTRING::from("Unlock Lyra");
             verified = match UserConsentVerifier::RequestVerificationAsync(&message) {
                 Ok(operation) => {
@@ -180,6 +209,8 @@ pub fn request_biometric_auth(app_handle: tauri::AppHandle) -> Result<(), String
                             Err(_) => break,
                         }
                     }
+
+                    toggle_taskbar(true);
 
                     operation
                         .GetResults()

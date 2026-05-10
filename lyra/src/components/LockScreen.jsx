@@ -58,6 +58,7 @@ const LockScreen = ({ isLocked, onUnlock, biometricAvailable }) => {
     const [time, setTime] = useState(new Date());
     const [unlocking, setUnlocking] = useState(false);
     const [shakeKey, setShakeKey] = useState(0);
+    const [showAuthCard, setShowAuthCard] = useState(false);
     const inputRef = useRef(null);
     const particles = useRef(createParticles());
     const biometricTimeoutRef = useRef(null);
@@ -82,6 +83,7 @@ const LockScreen = ({ isLocked, onUnlock, biometricAvailable }) => {
             setShowPasswordMode(false);
             setLoading(false);
             setBiometricChecking(false);
+            setShowAuthCard(false);
             biometricActiveRef.current = false;
             if (biometricTimeoutRef.current) {
                 clearTimeout(biometricTimeoutRef.current);
@@ -181,10 +183,32 @@ const LockScreen = ({ isLocked, onUnlock, biometricAvailable }) => {
         }
     }, [biometricAvailable, biometricChecking, isLocked, showPasswordMode]);
 
+    // Show auth card on Enter key only
     useEffect(() => {
-        if (!fingerprintMode || unlocking) return;
-        handleBiometric();
-    }, [fingerprintMode, handleBiometric, unlocking]);
+        if (!isLocked || unlocking) return;
+
+        const handleKeyPress = (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+
+                // First show auth card if not visible
+                if (!showAuthCard) {
+                    setShowAuthCard(true);
+                    return;
+                }
+
+                // Then trigger authentication
+                if (fingerprintMode) {
+                    handleBiometric();
+                } else {
+                    handleSubmit(e);
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyPress);
+        return () => window.removeEventListener('keydown', handleKeyPress);
+    }, [isLocked, unlocking, showAuthCard, fingerprintMode, handleBiometric, handleSubmit]);
 
     useEffect(() => () => {
         biometricActiveRef.current = false;
@@ -251,150 +275,155 @@ const LockScreen = ({ isLocked, onUnlock, biometricAvailable }) => {
                             </motion.div>
                             <div className="lockscreen-date">{formatDate(time)}</div>
                         </div>
+                    </motion.div>
 
-                        <motion.div
-                            className="lockscreen-auth-card"
-                            initial={{ opacity: 0, y: 18, scale: 0.98 }}
-                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                            transition={{ duration: 0.45, delay: 0.22, ease: 'easeOut' }}
-                        >
-                            <div className="lockscreen-auth-head">
-                                <div className="lockscreen-avatar">
-                                    <div className="lockscreen-avatar-ring">
-                                        <div className="lockscreen-avatar-inner">
-                                            {fingerprintMode ? <FingerprintIcon size={34} /> : <LockKeyIcon />}
+                    {/* Auth Card - Top Left Corner */}
+                    <motion.div
+                        className="lockscreen-auth-card"
+                        initial={{ opacity: 0, y: -20, scale: 0.95 }}
+                        animate={showAuthCard ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: -20, scale: 0.95 }}
+                        transition={{ duration: 0.45, ease: 'easeOut' }}
+                    >
+                        {showAuthCard && (
+                            <>
+                                <div className="lockscreen-auth-head">
+                                    <div className="lockscreen-avatar">
+                                        <div className="lockscreen-avatar-ring">
+                                            <div className="lockscreen-avatar-inner">
+                                                {fingerprintMode ? <FingerprintIcon size={34} /> : <LockKeyIcon />}
+                                            </div>
                                         </div>
+                                    </div>
+
+                                    <div className="lockscreen-greeting">
+                                        <span className="lockscreen-greeting-label">Welcome back</span>
+                                        <span className="lockscreen-greeting-name">{username}</span>
+                                    </div>
+
+                                    <div className={`lockscreen-status-pill ${fingerprintMode ? 'active' : ''}`}>
+                                        <span />
+                                        {fingerprintMode ? 'Windows Hello' : 'Password'}
                                     </div>
                                 </div>
 
-                                <div className="lockscreen-greeting">
-                                    <span className="lockscreen-greeting-label">Welcome back</span>
-                                    <span className="lockscreen-greeting-name">{username}</span>
-                                </div>
-
-                                <div className={`lockscreen-status-pill ${fingerprintMode ? 'active' : ''}`}>
-                                    <span />
-                                    {fingerprintMode ? 'Windows Hello' : 'Password'}
-                                </div>
-                            </div>
-
-                            {/* ── Fingerprint Mode ── */}
-                            {fingerprintMode && (
-                                <motion.div
-                                    className="lockscreen-fingerprint-section"
-                                    initial={{ opacity: 0, y: 10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: 0.3 }}
-                                >
+                                {/* ── Fingerprint Mode ── */}
+                                {fingerprintMode && (
                                     <motion.div
-                                        className="lockscreen-fingerprint-status"
-                                        animate={{ scale: biometricChecking ? [1, 1.02, 1] : 1 }}
-                                        transition={{ duration: 1.35, repeat: biometricChecking ? Infinity : 0 }}
+                                        className="lockscreen-fingerprint-section"
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ delay: 0.3 }}
                                     >
-                                        <div className="lockscreen-scanner">
-                                            <span className="lockscreen-scanner-ring ring-one" />
-                                            <span className="lockscreen-scanner-ring ring-two" />
-                                            <span className="lockscreen-scanner-ring ring-three" />
-                                            <div className={`lockscreen-fingerprint-icon ${biometricChecking ? 'scanning' : ''}`}>
-                                                <FingerprintIcon size={52} />
+                                        <motion.div
+                                            className="lockscreen-fingerprint-status"
+                                            animate={{ scale: biometricChecking ? [1, 1.02, 1] : 1 }}
+                                            transition={{ duration: 1.35, repeat: biometricChecking ? Infinity : 0 }}
+                                        >
+                                            <div className="lockscreen-scanner">
+                                                <span className="lockscreen-scanner-ring ring-one" />
+                                                <span className="lockscreen-scanner-ring ring-two" />
+                                                <span className="lockscreen-scanner-ring ring-three" />
+                                                <div className={`lockscreen-fingerprint-icon ${biometricChecking ? 'scanning' : ''}`}>
+                                                    <FingerprintIcon size={52} />
+                                                </div>
                                             </div>
-                                        </div>
-                                        <div className="lockscreen-fingerprint-copy">
-                                            <span>{biometricChecking ? 'Scanning fingerprint' : 'Waiting for fingerprint'}</span>
-                                            <small>Touch the reader to unlock Lyra</small>
-                                        </div>
-                                    </motion.div>
+                                            <div className="lockscreen-fingerprint-copy">
+                                                <span>{biometricChecking ? 'Scanning fingerprint' : 'Ready to authenticate'}</span>
+                                                <small>Touch the fingerprint reader</small>
+                                            </div>
+                                        </motion.div>
 
-                                    <button
-                                        className="lockscreen-switch-mode"
-                                        onClick={() => {
-                                            biometricActiveRef.current = false;
-                                            if (biometricTimeoutRef.current) {
-                                                clearTimeout(biometricTimeoutRef.current);
-                                                biometricTimeoutRef.current = null;
-                                            }
-                                            setBiometricChecking(false);
-                                            setShowPasswordMode(true);
-                                        }}
-                                        disabled={unlocking}
-                                    >
-                                        Use password instead
-                                    </button>
-                                </motion.div>
-                            )}
-
-                            {/* ── Password Mode ── */}
-                            {!fingerprintMode && (
-                                <motion.div
-                                    initial={{ opacity: 0, y: 10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ duration: 0.3 }}
-                                    style={{ width: '100%' }}
-                                >
-                                    <motion.form
-                                        className="lockscreen-form"
-                                        onSubmit={handleSubmit}
-                                        key={shakeKey}
-                                        initial={shakeKey > 0 ? { x: 0 } : false}
-                                        animate={shakeKey > 0 ? { x: [0, -12, 12, -8, 8, -4, 4, 0] } : {}}
-                                        transition={{ duration: 0.45, ease: 'easeInOut' }}
-                                    >
-                                        <div className="lockscreen-input-wrap">
-                                            <input
-                                                ref={inputRef}
-                                                type="password"
-                                                className="lockscreen-input"
-                                                placeholder="Enter password..."
-                                                value={password}
-                                                onChange={(e) => { setPassword(e.target.value); setError(''); }}
-                                                disabled={loading || unlocking}
-                                                autoComplete="off"
-                                                spellCheck={false}
-                                            />
-                                            <button
-                                                type="submit"
-                                                className="lockscreen-submit"
-                                                disabled={!password.trim() || loading || unlocking}
-                                            >
-                                                {loading ? (
-                                                    <div className="lockscreen-spinner" />
-                                                ) : (
-                                                    <ArrowRightIcon />
-                                                )}
-                                            </button>
-                                        </div>
-                                    </motion.form>
-
-                                    {/* Switch back to fingerprint if available */}
-                                    {biometricAvailable && (
                                         <button
                                             className="lockscreen-switch-mode"
-                                            onClick={() => { setShowPasswordMode(false); setError(''); }}
+                                            onClick={() => {
+                                                biometricActiveRef.current = false;
+                                                if (biometricTimeoutRef.current) {
+                                                    clearTimeout(biometricTimeoutRef.current);
+                                                    biometricTimeoutRef.current = null;
+                                                }
+                                                setBiometricChecking(false);
+                                                setShowPasswordMode(true);
+                                            }}
                                             disabled={unlocking}
-                                            style={{ marginTop: 12 }}
                                         >
-                                            <FingerprintIcon size={14} />
-                                            <span style={{ marginLeft: 6 }}>Use fingerprint</span>
+                                            Use password instead
                                         </button>
-                                    )}
-                                </motion.div>
-                            )}
-
-                            {/* Error Message */}
-                            <AnimatePresence>
-                                {error && (
-                                    <motion.div
-                                        className="lockscreen-error"
-                                        initial={{ opacity: 0, y: -8 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        exit={{ opacity: 0, y: -8 }}
-                                        transition={{ duration: 0.2 }}
-                                    >
-                                        {error}
                                     </motion.div>
                                 )}
-                            </AnimatePresence>
-                        </motion.div>
+
+                                {/* ── Password Mode ── */}
+                                {!fingerprintMode && (
+                                    <motion.div
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ duration: 0.3 }}
+                                        style={{ width: '100%' }}
+                                    >
+                                        <motion.form
+                                            className="lockscreen-form"
+                                            onSubmit={handleSubmit}
+                                            key={shakeKey}
+                                            initial={shakeKey > 0 ? { x: 0 } : false}
+                                            animate={shakeKey > 0 ? { x: [0, -12, 12, -8, 8, -4, 4, 0] } : {}}
+                                            transition={{ duration: 0.45, ease: 'easeInOut' }}
+                                        >
+                                            <div className="lockscreen-input-wrap">
+                                                <input
+                                                    ref={inputRef}
+                                                    type="password"
+                                                    className="lockscreen-input"
+                                                    placeholder="Enter password..."
+                                                    value={password}
+                                                    onChange={(e) => { setPassword(e.target.value); setError(''); }}
+                                                    disabled={loading || unlocking}
+                                                    autoComplete="off"
+                                                    spellCheck={false}
+                                                />
+                                                <button
+                                                    type="submit"
+                                                    className="lockscreen-submit"
+                                                    disabled={!password.trim() || loading || unlocking}
+                                                >
+                                                    {loading ? (
+                                                        <div className="lockscreen-spinner" />
+                                                    ) : (
+                                                        <ArrowRightIcon />
+                                                    )}
+                                                </button>
+                                            </div>
+                                        </motion.form>
+
+                                        {/* Switch back to fingerprint if available */}
+                                        {biometricAvailable && (
+                                            <button
+                                                className="lockscreen-switch-mode"
+                                                onClick={() => { setShowPasswordMode(false); setError(''); }}
+                                                disabled={unlocking}
+                                                style={{ marginTop: 12 }}
+                                            >
+                                                <FingerprintIcon size={14} />
+                                                <span style={{ marginLeft: 6 }}>Use fingerprint</span>
+                                            </button>
+                                        )}
+                                    </motion.div>
+                                )}
+
+                                {/* Error Message */}
+                                <AnimatePresence>
+                                    {error && (
+                                        <motion.div
+                                            className="lockscreen-error"
+                                            initial={{ opacity: 0, y: -8 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, y: -8 }}
+                                            transition={{ duration: 0.2 }}
+                                        >
+                                            {error}
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </>
+                        )}
                     </motion.div>
 
                     {/* Bottom hint */}

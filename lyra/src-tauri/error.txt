@@ -1,0 +1,24 @@
+    Checking lyra v0.1.0 (C:\D Data\Lyra\lyra\src-tauri)
+error[E0382]: use of moved value: `sec`
+  --> src\auth.rs:45:50
+   |
+42 |         let mut sec = FindWindowExW(HWND::default(), HWND::default(), windows::core::w!("Shell_SecondaryTrayWnd"), windows::core::PC...
+   |             ------- move occurs because `sec` has type `Result<Win32::Foundation::HWND, windows_result::error::Error>`, which does not implement the `Copy` trait
+43 |         while sec.is_ok() {
+   |         ----------------- inside of this loop
+44 |             let _ = ShowWindow(sec.unwrap(), if show { SW_SHOW } else { SW_HIDE });
+   |                                --- -------- `sec` moved due to this method call
+   |                                |
+   |                                help: consider calling `.as_ref()` or `.as_mut()` to borrow the type's contents
+45 |             sec = FindWindowExW(HWND::default(), sec.unwrap(), windows::core::w!("Shell_SecondaryTrayWnd"), windows::core::PCWSTR::n...
+   |                                                  ^^^ value used here after move
+   |
+note: `Result::<T, E>::unwrap` takes ownership of the receiver `self`, which moves `sec`
+  --> /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library\core\src\result.rs:1227:18
+help: you can `clone` the value and consume it, but this might not be your desired behavior
+   |
+44 |             let _ = ShowWindow(sec.clone().unwrap(), if show { SW_SHOW } else { SW_HIDE });
+   |                                   ++++++++
+
+For more information about this error, try `rustc --explain E0382`.
+error: could not compile `lyra` (lib) due to 1 previous error
