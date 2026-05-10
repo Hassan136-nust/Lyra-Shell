@@ -5,8 +5,8 @@ import { AppProvider, useAppContext } from './contexts/AppContext';
 import './App.css';
 
 function LockOverlay() {
-  const { isLocked, unlockScreen } = useAppContext();
-  return <LockScreen isLocked={isLocked} onUnlock={unlockScreen} />;
+  const { isLocked, unlockScreen, biometricAvailable } = useAppContext();
+  return <LockScreen isLocked={isLocked} onUnlock={unlockScreen} biometricAvailable={biometricAvailable} />;
 }
 
 function App() {

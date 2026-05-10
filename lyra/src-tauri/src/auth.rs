@@ -11,6 +11,8 @@ use std::os::windows::process::CommandExt;
 
 use std::process::Command;
 
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 /// Return the current Windows username.
 #[tauri::command]
 pub fn get_current_username() -> String {
@@ -68,48 +70,21 @@ pub fn validate_password(password: String) -> Result<bool, String> {
     }
 }
 
-/// The PowerShell preamble that loads WinRT async helpers.
-#[cfg(target_os = "windows")]
-const PS_WINRT_PREAMBLE: &str = r#"
-Add-Type -AssemblyName System.Runtime.WindowsRuntime
-[void][Windows.Security.Credentials.UI.UserConsentVerifier,Windows.Security.Credentials.UI,ContentType=WindowsRuntime]
-$asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
-    $_.Name -eq 'AsTask' -and
-    $_.GetParameters().Count -eq 1 -and
-    $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1'
-})[0]
-"#;
-
-/// Check whether Windows Hello biometric is available.
+/// Check whether Windows Hello (biometric service) is available.
+/// Uses `sc query wbiosrvc` — fast and non-blocking (no PowerShell WinRT).
 #[tauri::command]
 pub fn check_biometric_available() -> Result<bool, String> {
     #[cfg(target_os = "windows")]
     {
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-        let script = format!(
-            r#"
-try {{
-    {preamble}
-    $asTask = $asTaskGeneric.MakeGenericMethod([Windows.Security.Credentials.UI.UserConsentVerifierAvailability])
-    $op = [Windows.Security.Credentials.UI.UserConsentVerifier]::CheckAvailabilityAsync()
-    $task = $asTask.Invoke($null, @($op))
-    $task.Wait() | Out-Null
-    $task.Result.ToString()
-}} catch {{
-    'NotAvailable'
-}}
-"#,
-            preamble = PS_WINRT_PREAMBLE
-        );
-
-        let output = Command::new("powershell")
+        let output = Command::new("sc")
             .creation_flags(CREATE_NO_WINDOW)
-            .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", &script])
+            .args(["query", "wbiosrvc"])
             .output()
-            .map_err(|e| format!("failed to check biometric: {e}"))?;
+            .map_err(|e| format!("failed to query biometric service: {e}"))?;
 
-        let result = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        Ok(result == "Available")
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        // Service is running if output contains "RUNNING"
+        Ok(stdout.contains("RUNNING"))
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -118,52 +93,66 @@ try {{
     }
 }
 
-/// Request Windows Hello biometric verification (fingerprint / face / PIN).
+/// Request Windows Hello biometric verification.
+/// Runs on a background thread and emits a "biometric-result" event
+/// with the boolean result to avoid blocking the UI.
 #[tauri::command]
-pub fn request_biometric_auth(app_handle: tauri::AppHandle) -> Result<bool, String> {
-    #[cfg(target_os = "windows")]
-    {
-        // Temporarily lower Lyra so the Windows Hello dialog is visible
-        use tauri::Manager;
-        if let Some(win) = app_handle.get_webview_window("main") {
-            let _ = win.set_always_on_top(false);
-        }
+pub fn request_biometric_auth(app_handle: tauri::AppHandle) -> Result<(), String> {
+    std::thread::spawn(move || {
+        let verified: bool;
 
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-        let script = format!(
-            r#"
-try {{
-    {preamble}
+        #[cfg(target_os = "windows")]
+        {
+            // Temporarily lower Lyra so the Windows Hello dialog is visible
+            use tauri::Manager;
+            if let Some(win) = app_handle.get_webview_window("main") {
+                let _ = win.set_always_on_top(false);
+            }
+
+            let script = r#"
+try {
+    Add-Type -AssemblyName System.Runtime.WindowsRuntime
+    [void][Windows.Security.Credentials.UI.UserConsentVerifier,Windows.Security.Credentials.UI,ContentType=WindowsRuntime]
+    $asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
+        $_.Name -eq 'AsTask' -and
+        $_.GetParameters().Count -eq 1 -and
+        $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1'
+    })[0]
     $asTask = $asTaskGeneric.MakeGenericMethod([Windows.Security.Credentials.UI.UserConsentVerificationResult])
     $op = [Windows.Security.Credentials.UI.UserConsentVerifier]::RequestVerificationAsync('Unlock Lyra')
     $task = $asTask.Invoke($null, @($op))
     $task.Wait() | Out-Null
     $task.Result.ToString()
-}} catch {{
-    'NotConfiguredForUser'
-}}
-"#,
-            preamble = PS_WINRT_PREAMBLE
-        );
+} catch {
+    'Failed'
+}
+"#;
 
-        let output = Command::new("powershell")
-            .creation_flags(CREATE_NO_WINDOW)
-            .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", &script])
-            .output()
-            .map_err(|e| format!("biometric auth failed: {e}"))?;
+            let output = Command::new("powershell")
+                .creation_flags(CREATE_NO_WINDOW)
+                .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", script])
+                .output();
 
-        // Restore Lyra on top
-        if let Some(win) = app_handle.get_webview_window("main") {
-            let _ = win.set_always_on_top(true);
+            verified = match output {
+                Ok(o) => String::from_utf8_lossy(&o.stdout).trim() == "Verified",
+                Err(_) => false,
+            };
+
+            // Restore Lyra on top
+            if let Some(win) = app_handle.get_webview_window("main") {
+                let _ = win.set_always_on_top(true);
+            }
         }
 
-        let result = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        Ok(result == "Verified")
-    }
+        #[cfg(not(target_os = "windows"))]
+        {
+            verified = false;
+        }
 
-    #[cfg(not(target_os = "windows"))]
-    {
-        let _ = app_handle;
-        Err("biometric auth only supported on Windows".to_string())
-    }
+        // Emit result to frontend
+        use tauri::Emitter;
+        let _ = app_handle.emit("biometric-result", verified);
+    });
+
+    Ok(())
 }

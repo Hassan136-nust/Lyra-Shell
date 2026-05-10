@@ -1369,9 +1369,6 @@ pub fn run() {
             let _ = LOG_PATH.set(log_path);
             append_diag_log("INFO", "Lyra started");
 
-            // Initialise Win+L interception and close prevention.
-            lockdown::init_lockdown(app.handle());
-
             // Prevent closing Lyra while the lock screen is active.
             if let Some(win) = app.get_webview_window("main") {
                 win.on_window_event(move |event| {
@@ -1425,7 +1422,4 @@ pub fn run() {
                 format!("error while running tauri application: {error}"),
             );
         });
-
-    // Restore Win+L on exit.
-    lockdown::cleanup_lockdown();
 }

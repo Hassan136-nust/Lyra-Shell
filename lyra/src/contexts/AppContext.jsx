@@ -66,27 +66,19 @@ export const AppProvider = ({ children }) => {
   });
   const [activeWorkspace, setActiveWorkspace] = useState(1);
   const [isLocked, setIsLocked] = useState(false);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
 
-  // Listen for Win+L hotkey from the backend
+  // Check biometric availability once on startup (fast sc query, non-blocking)
   useEffect(() => {
-    let unlisten;
-    (async () => {
-      try {
-        const { listen } = await import('@tauri-apps/api/event');
-        unlisten = await listen('trigger-lock', () => {
-          setIsLocked(true);
-          tauriInvoke('set_lock_state', { locked: true });
-        });
-      } catch { }
-    })();
-    return () => { if (unlisten) unlisten(); };
+    tauriInvoke('check_biometric_available', {}, false)
+      .then((avail) => setBiometricAvailable(!!avail))
+      .catch(() => { });
   }, []);
 
   // Block dangerous keyboard shortcuts when locked
   useEffect(() => {
     if (!isLocked) return;
     const handler = (e) => {
-      // Block Alt+F4, Ctrl+W, Escape, Win key combos
       if (e.altKey && e.key === 'F4') e.preventDefault();
       if (e.ctrlKey && (e.key === 'w' || e.key === 'W')) e.preventDefault();
       if (e.key === 'Escape') e.preventDefault();
@@ -192,6 +184,7 @@ export const AppProvider = ({ children }) => {
       isLocked,
       lockScreen,
       unlockScreen,
+      biometricAvailable,
     }}>
       {children}
     </AppContext.Provider>

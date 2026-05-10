@@ -3,8 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { invoke } from '@tauri-apps/api/core';
 
 /* ── Inline SVG Icons ─────────────────────────────────────────── */
-const FingerprintIcon = () => (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+const FingerprintIcon = ({ size = 48 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round">
         <path d="M12 10a2 2 0 0 1 2 2c0 1.02-.1 2.51-.26 4" />
         <path d="M14 13.12c0 2.38-.16 6.88-1.5 9.88" />
         <path d="M17.29 21.02c.12-.6.43-2.3.5-3.02a11.02 11.02 0 0 0-1.79-8" />
@@ -47,18 +47,21 @@ const createParticles = () =>
     }));
 
 /* ── Lock Screen Component ────────────────────────────────────── */
-const LockScreen = ({ isLocked, onUnlock }) => {
+const LockScreen = ({ isLocked, onUnlock, biometricAvailable }) => {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [username, setUsername] = useState('User');
-    const [biometricAvailable, setBiometricAvailable] = useState(false);
     const [biometricChecking, setBiometricChecking] = useState(false);
+    const [showPasswordMode, setShowPasswordMode] = useState(false);
     const [time, setTime] = useState(new Date());
     const [unlocking, setUnlocking] = useState(false);
     const [shakeKey, setShakeKey] = useState(0);
     const inputRef = useRef(null);
     const particles = useRef(createParticles());
+
+    // Decide initial mode based on biometric availability
+    const fingerprintMode = biometricAvailable && !showPasswordMode;
 
     // Clock
     useEffect(() => {
@@ -67,26 +70,25 @@ const LockScreen = ({ isLocked, onUnlock }) => {
         return () => clearInterval(t);
     }, [isLocked]);
 
-    // Focus input when lock screen appears
+    // Reset state when lock screen appears
     useEffect(() => {
-        if (isLocked && inputRef.current) {
-            setTimeout(() => inputRef.current?.focus(), 400);
-        }
         if (isLocked) {
             setPassword('');
             setError('');
             setUnlocking(false);
+            setShowPasswordMode(false);
+            setLoading(false);
+            setBiometricChecking(false);
+            invoke('get_current_username').then(setUsername).catch(() => { });
         }
     }, [isLocked]);
 
-    // Fetch username + biometric status
+    // Focus password input when switching to password mode
     useEffect(() => {
-        if (!isLocked) return;
-        invoke('get_current_username').then(setUsername).catch(() => { });
-        invoke('check_biometric_available')
-            .then((avail) => setBiometricAvailable(avail))
-            .catch(() => setBiometricAvailable(false));
-    }, [isLocked]);
+        if (isLocked && showPasswordMode && inputRef.current) {
+            setTimeout(() => inputRef.current?.focus(), 200);
+        }
+    }, [isLocked, showPasswordMode]);
 
     const handleSubmit = useCallback(async (e) => {
         e?.preventDefault();
@@ -122,11 +124,12 @@ const LockScreen = ({ isLocked, onUnlock }) => {
                 setUnlocking(true);
                 setTimeout(() => onUnlock(), 800);
             } else {
-                setError('Biometric verification failed');
-                setShakeKey((k) => k + 1);
+                setError('Verification failed. Try password instead.');
+                setShowPasswordMode(true);
             }
-        } catch (err) {
-            setError(String(err));
+        } catch {
+            setError('Biometric not available. Use password.');
+            setShowPasswordMode(true);
         } finally {
             setBiometricChecking(false);
         }
@@ -149,10 +152,7 @@ const LockScreen = ({ isLocked, onUnlock }) => {
                 >
                     {/* ── Animated Background ── */}
                     <div className="lockscreen-bg">
-                        {/* Gradient mesh */}
                         <div className="lockscreen-gradient" />
-
-                        {/* Particles */}
                         <div className="lockscreen-particles">
                             {particles.current.map((p) => (
                                 <div
@@ -170,8 +170,6 @@ const LockScreen = ({ isLocked, onUnlock }) => {
                                 />
                             ))}
                         </div>
-
-                        {/* Aurora glow */}
                         <div className="lockscreen-aurora" />
                     </div>
 
@@ -200,7 +198,7 @@ const LockScreen = ({ isLocked, onUnlock }) => {
                         <div className="lockscreen-avatar">
                             <div className="lockscreen-avatar-ring">
                                 <div className="lockscreen-avatar-inner">
-                                    <LockKeyIcon />
+                                    {fingerprintMode ? <FingerprintIcon size={36} /> : <LockKeyIcon />}
                                 </div>
                             </div>
                         </div>
@@ -211,40 +209,93 @@ const LockScreen = ({ isLocked, onUnlock }) => {
                             <span className="lockscreen-greeting-name">{username}</span>
                         </div>
 
-                        {/* Password Form */}
-                        <motion.form
-                            className="lockscreen-form"
-                            onSubmit={handleSubmit}
-                            key={shakeKey}
-                            initial={shakeKey > 0 ? { x: 0 } : false}
-                            animate={shakeKey > 0 ? { x: [0, -12, 12, -8, 8, -4, 4, 0] } : {}}
-                            transition={{ duration: 0.45, ease: 'easeInOut' }}
-                        >
-                            <div className="lockscreen-input-wrap">
-                                <input
-                                    ref={inputRef}
-                                    type="password"
-                                    className="lockscreen-input"
-                                    placeholder="Enter password..."
-                                    value={password}
-                                    onChange={(e) => { setPassword(e.target.value); setError(''); }}
-                                    disabled={loading || unlocking}
-                                    autoComplete="off"
-                                    spellCheck={false}
-                                />
-                                <button
-                                    type="submit"
-                                    className="lockscreen-submit"
-                                    disabled={!password.trim() || loading || unlocking}
+                        {/* ── Fingerprint Mode ── */}
+                        {fingerprintMode && (
+                            <motion.div
+                                className="lockscreen-fingerprint-section"
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.3 }}
+                            >
+                                <motion.button
+                                    className="lockscreen-fingerprint-btn"
+                                    onClick={handleBiometric}
+                                    disabled={biometricChecking || unlocking}
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
                                 >
-                                    {loading ? (
-                                        <div className="lockscreen-spinner" />
-                                    ) : (
-                                        <ArrowRightIcon />
-                                    )}
+                                    <div className={`lockscreen-fingerprint-icon ${biometricChecking ? 'scanning' : ''}`}>
+                                        <FingerprintIcon size={48} />
+                                    </div>
+                                    <span>{biometricChecking ? 'Scanning...' : 'Touch to unlock'}</span>
+                                </motion.button>
+
+                                <button
+                                    className="lockscreen-switch-mode"
+                                    onClick={() => setShowPasswordMode(true)}
+                                    disabled={unlocking}
+                                >
+                                    Use password instead
                                 </button>
-                            </div>
-                        </motion.form>
+                            </motion.div>
+                        )}
+
+                        {/* ── Password Mode ── */}
+                        {!fingerprintMode && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.3 }}
+                                style={{ width: '100%' }}
+                            >
+                                <motion.form
+                                    className="lockscreen-form"
+                                    onSubmit={handleSubmit}
+                                    key={shakeKey}
+                                    initial={shakeKey > 0 ? { x: 0 } : false}
+                                    animate={shakeKey > 0 ? { x: [0, -12, 12, -8, 8, -4, 4, 0] } : {}}
+                                    transition={{ duration: 0.45, ease: 'easeInOut' }}
+                                >
+                                    <div className="lockscreen-input-wrap">
+                                        <input
+                                            ref={inputRef}
+                                            type="password"
+                                            className="lockscreen-input"
+                                            placeholder="Enter password..."
+                                            value={password}
+                                            onChange={(e) => { setPassword(e.target.value); setError(''); }}
+                                            disabled={loading || unlocking}
+                                            autoComplete="off"
+                                            spellCheck={false}
+                                        />
+                                        <button
+                                            type="submit"
+                                            className="lockscreen-submit"
+                                            disabled={!password.trim() || loading || unlocking}
+                                        >
+                                            {loading ? (
+                                                <div className="lockscreen-spinner" />
+                                            ) : (
+                                                <ArrowRightIcon />
+                                            )}
+                                        </button>
+                                    </div>
+                                </motion.form>
+
+                                {/* Switch back to fingerprint if available */}
+                                {biometricAvailable && (
+                                    <button
+                                        className="lockscreen-switch-mode"
+                                        onClick={() => { setShowPasswordMode(false); setError(''); }}
+                                        disabled={unlocking}
+                                        style={{ marginTop: 12 }}
+                                    >
+                                        <FingerprintIcon size={14} />
+                                        <span style={{ marginLeft: 6 }}>Use fingerprint</span>
+                                    </button>
+                                )}
+                            </motion.div>
+                        )}
 
                         {/* Error Message */}
                         <AnimatePresence>
@@ -260,23 +311,6 @@ const LockScreen = ({ isLocked, onUnlock }) => {
                                 </motion.div>
                             )}
                         </AnimatePresence>
-
-                        {/* Biometric Button */}
-                        {biometricAvailable && (
-                            <motion.button
-                                className="lockscreen-biometric"
-                                onClick={handleBiometric}
-                                disabled={biometricChecking || unlocking}
-                                whileHover={{ scale: 1.05 }}
-                                whileTap={{ scale: 0.95 }}
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                transition={{ delay: 0.4 }}
-                            >
-                                <FingerprintIcon />
-                                <span>{biometricChecking ? 'Verifying...' : 'Unlock with Windows Hello'}</span>
-                            </motion.button>
-                        )}
                     </motion.div>
 
                     {/* Bottom hint */}
