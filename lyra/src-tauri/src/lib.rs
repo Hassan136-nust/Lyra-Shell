@@ -1432,22 +1432,57 @@ fn get_diagnostics_info() -> DiagnosticsInfo {
 static mut KEYBOARD_HOOK: Option<windows::Win32::UI::WindowsAndMessaging::HHOOK> = None;
 
 #[cfg(target_os = "windows")]
+static mut WIN_DOWN: bool = false;
+#[cfg(target_os = "windows")]
+static mut SUPPRESS_WIN_UP: bool = false;
+
+#[cfg(target_os = "windows")]
 unsafe extern "system" fn keyboard_hook_proc(
     code: i32,
     wparam: windows::Win32::Foundation::WPARAM,
     lparam: windows::Win32::Foundation::LPARAM,
 ) -> windows::Win32::Foundation::LRESULT {
-    use windows::Win32::UI::WindowsAndMessaging::{CallNextHookEx, KBDLLHOOKSTRUCT};
+    use windows::Win32::UI::WindowsAndMessaging::{CallNextHookEx, KBDLLHOOKSTRUCT, WM_KEYDOWN, WM_SYSKEYDOWN, WM_KEYUP, WM_SYSKEYUP};
+    use windows::Win32::UI::Input::KeyboardAndMouse::{keybd_event, KEYEVENTF_KEYUP};
     
-    // If Lyra is locked, intercept Windows Keys (VK_LWIN = 0x5B, VK_RWIN = 0x5C)
-    if code >= 0 && lockdown::is_locked() {
+    if code >= 0 {
         let kbd = &*(lparam.0 as *const KBDLLHOOKSTRUCT);
         let key = kbd.vkCode;
+        let is_down = wparam.0 as u32 == WM_KEYDOWN || wparam.0 as u32 == WM_SYSKEYDOWN;
+        let is_up = wparam.0 as u32 == WM_KEYUP || wparam.0 as u32 == WM_SYSKEYUP;
+
+        // Manually track Win key state because GetAsyncKeyState is unreliable in low-level hooks
         if key == 0x5B || key == 0x5C {
-            // Swallow the key fully
+            if is_down {
+                WIN_DOWN = true;
+            } else if is_up {
+                WIN_DOWN = false;
+                if SUPPRESS_WIN_UP {
+                    SUPPRESS_WIN_UP = false;
+                    // Trigger a neutral dummy keystroke before the OS processes the Win key release.
+                    // This tells the OS to abort opening the Start Menu.
+                    keybd_event(0x88, 0, Default::default(), 0);
+                    keybd_event(0x88, 0, KEYEVENTF_KEYUP, 0);
+                }
+            }
+        }
+        
+        // If Lyra is locked, intercept Windows Keys completely
+        if lockdown::is_locked() && (key == 0x5B || key == 0x5C) {
+            SUPPRESS_WIN_UP = false;
+            return windows::Win32::Foundation::LRESULT(1);
+        }
+
+        // Prevent native Win+D from minimizing Lyra and showing the Windows desktop
+        if key == 0x44 && WIN_DOWN {
+            if is_down {
+                SUPPRESS_WIN_UP = true;
+            }
+            // Swallow the Win+D combination entirely
             return windows::Win32::Foundation::LRESULT(1);
         }
     }
+    
     CallNextHookEx(None, code, wparam, lparam)
 }
 
