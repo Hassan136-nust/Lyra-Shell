@@ -114,26 +114,40 @@ const LockScreen = ({ isLocked, onUnlock, biometricAvailable }) => {
         }
     }, [password, loading, onUnlock]);
 
+    useEffect(() => {
+        let unlisten;
+        (async () => {
+            try {
+                const { listen } = await import('@tauri-apps/api/event');
+                unlisten = await listen('biometric-result', (event) => {
+                    const result = event.payload;
+                    if (result) {
+                        setUnlocking(true);
+                        setTimeout(() => onUnlock(), 800);
+                    } else {
+                        setError('Verification failed. Try password instead.');
+                        setShowPasswordMode(true);
+                        setBiometricChecking(false);
+                    }
+                });
+            } catch (e) { }
+        })();
+        return () => { if (unlisten) unlisten(); };
+    }, [onUnlock]);
+
     const handleBiometric = useCallback(async () => {
         if (biometricChecking) return;
         setBiometricChecking(true);
         setError('');
         try {
-            const result = await invoke('request_biometric_auth');
-            if (result) {
-                setUnlocking(true);
-                setTimeout(() => onUnlock(), 800);
-            } else {
-                setError('Verification failed. Try password instead.');
-                setShowPasswordMode(true);
-            }
+            await invoke('request_biometric_auth');
+            // Result will be handled by the biometric-result event listener
         } catch {
             setError('Biometric not available. Use password.');
             setShowPasswordMode(true);
-        } finally {
             setBiometricChecking(false);
         }
-    }, [biometricChecking, onUnlock]);
+    }, [biometricChecking]);
 
     const formatTime = (d) =>
         d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });

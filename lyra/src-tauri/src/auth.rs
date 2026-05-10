@@ -71,20 +71,42 @@ pub fn validate_password(password: String) -> Result<bool, String> {
 }
 
 /// Check whether Windows Hello (biometric service) is available.
-/// Uses `sc query wbiosrvc` — fast and non-blocking (no PowerShell WinRT).
+/// Uses PowerShell to correctly query the Windows API.
 #[tauri::command]
-pub fn check_biometric_available() -> Result<bool, String> {
+pub async fn check_biometric_available() -> Result<bool, String> {
     #[cfg(target_os = "windows")]
     {
-        let output = Command::new("sc")
+        // Run synchronously but within an async Tauri command to prevent main thread blocking
+        let script = r#"
+try {
+    Add-Type -AssemblyName System.Runtime.WindowsRuntime
+    [void][Windows.Security.Credentials.UI.UserConsentVerifier,Windows.Security.Credentials.UI,ContentType=WindowsRuntime]
+    $asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
+        $_.Name -eq 'AsTask' -and
+        $_.GetParameters().Count -eq 1 -and
+        $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1'
+    })[0]
+    $asTask = $asTaskGeneric.MakeGenericMethod([Windows.Security.Credentials.UI.UserConsentVerifierAvailability])
+    $op = [Windows.Security.Credentials.UI.UserConsentVerifier]::CheckAvailabilityAsync()
+    $task = $asTask.Invoke($null, @($op))
+    $task.Wait() | Out-Null
+    $task.Result.ToString()
+} catch {
+    'DeviceNotPresent'
+}
+"#;
+        let output = Command::new("powershell")
             .creation_flags(CREATE_NO_WINDOW)
-            .args(["query", "wbiosrvc"])
-            .output()
-            .map_err(|e| format!("failed to query biometric service: {e}"))?;
+            .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", script])
+            .output();
 
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        // Service is running if output contains "RUNNING"
-        Ok(stdout.contains("RUNNING"))
+        match output {
+            Ok(o) => {
+                let status = String::from_utf8_lossy(&o.stdout);
+                Ok(status.trim() == "Available")
+            }
+            Err(_) => Ok(false),
+        }
     }
 
     #[cfg(not(target_os = "windows"))]

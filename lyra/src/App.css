@@ -1214,6 +1214,8 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  background-color: var(--ctp-crust);
+  pointer-events: all;
 }
 
 /* ── Background layers ── */
