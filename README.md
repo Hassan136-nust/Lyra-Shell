@@ -24,6 +24,9 @@ Lyra is a **custom desktop shell replacement** for Windows that provides a compl
 - ✅ **Custom Wallpaper** - Your own background image
 - ✅ **Glassmorphism UI** - Modern blur effects and transparency
 - ✅ **Smooth Animations** - Framer Motion powered transitions
+- ✅ **Custom Lock Screen** - Beautiful lock screen replacement (optional)
+- ✅ **Taskbar Replacement** - Hide Windows taskbar and use custom dock
+- ✅ **Shell Integration** - Can replace Windows Explorer as desktop shell
 
 ---
 
@@ -110,7 +113,8 @@ lyra/
 │   ├── components/
 │   │   ├── TopBar.jsx           # Top menu bar with system tray
 │   │   ├── TopBarSimple.jsx     # Simplified top bar (alternative)
-│   │   └── Dock.jsx             # Bottom dock with app icons
+│   │   ├── Dock.jsx             # Bottom dock with app icons
+│   │   └── LockScreen.jsx       # Custom lock screen (optional)
 │   ├── App.jsx                  # Main app component
 │   ├── App.css                  # App styles
 │   ├── main.jsx                 # React entry point
@@ -174,9 +178,67 @@ theme: {
 }
 ```
 
----
+## 🔧 Advanced Features
 
-## 🔧 Available System Commands
+### Custom Lock Screen
+
+Lyra can replace the Windows lock screen with a beautiful, customizable interface:
+
+**Features:**
+- 🎨 **Custom Design** - Beautiful gradients, glassmorphism effects
+- 🕐 **Live Clock** - Large, elegant time and date display
+- 🔐 **Secure Authentication** - Password-based unlock
+- ⚡ **Quick Actions** - Emergency, restart, shutdown buttons
+- 🌅 **Custom Wallpaper** - Use your own background
+- ✨ **Smooth Animations** - Framer Motion powered transitions
+
+**How to Enable:**
+```javascript
+// Manual lock (Ctrl+L)
+setIsLocked(true);
+
+// Automatic detection when Windows locks
+const locked = await invoke('is_workstation_locked');
+```
+
+### Taskbar Replacement
+
+Replace the Windows taskbar entirely with Lyra's custom dock:
+
+**Benefits:**
+- 🎯 **Complete Control** - Design exactly what you want
+- 🍎 **macOS-style** - Dock with magnification effects
+- 🎨 **Glassmorphism** - Modern blur and transparency
+- ⚡ **Better Performance** - Lighter than Windows taskbar
+- 🔧 **Customizable** - Add any features you need
+
+**Implementation:**
+```javascript
+// Hide Windows taskbar
+await invoke('hide_windows_taskbar');
+
+// Your custom dock takes over
+// Restore when needed
+await invoke('show_windows_taskbar');
+```
+
+### Shell Replacement (Advanced)
+
+For ultimate customization, Lyra can replace Windows Explorer entirely:
+
+**What this means:**
+- 🖥️ **Complete Desktop Control** - Lyra becomes your desktop environment
+- 🚀 **Faster Startup** - No Windows Explorer overhead
+- 🎨 **Unlimited Customization** - Design everything from scratch
+- 🔧 **Advanced Features** - Add features Windows doesn't have
+
+**Registry Configuration:**
+```
+HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon
+Shell = "C:\path\to\lyra.exe"
+```
+
+⚠️ **Warning:** This is advanced and requires careful implementation. Always have a backup plan!
 
 ### WiFi Control
 
@@ -226,7 +288,32 @@ await invoke('run_system_action', { action: 'restart' });
 await invoke('run_system_action', { action: 'shutdown' });
 ```
 
-### System Information
+### Lock Screen Control
+
+```javascript
+// Lock the workstation
+await invoke('lock_workstation');
+
+// Check if workstation is locked
+const isLocked = await invoke('is_workstation_locked');
+
+// Unlock with password
+const success = await invoke('unlock_workstation', { password: 'userpassword' });
+```
+
+### Taskbar Management
+
+```javascript
+// Hide Windows taskbar (use custom dock only)
+await invoke('hide_windows_taskbar');
+
+// Show Windows taskbar (restore default)
+await invoke('show_windows_taskbar');
+```
+
+---
+
+## 🔧 Available System Commands
 
 ```javascript
 const info = await invoke('get_system_info');
@@ -283,12 +370,19 @@ See `lyra/FIX_BUILD_TOOLS.md` for detailed guide.
 2. Restart dev server: `Ctrl+C` then `npm run tauri dev`
 3. Hard refresh: `Ctrl+Shift+R` in the app
 
-### Issue: WiFi Networks Not Loading
+### Issue: Lock Screen Not Working
 
 **Solution:**
-1. Run as Administrator (WiFi scanning requires elevated permissions)
-2. Check Windows Firewall settings
-3. Verify `netsh wlan show networks` works in CMD
+1. Check Windows permissions (may need admin rights)
+2. Verify password authentication is working
+3. Test manual lock trigger (Ctrl+L)
+
+### Issue: Taskbar Won't Hide
+
+**Solution:**
+1. Run Lyra as Administrator
+2. Check Windows version compatibility
+3. Verify Windows API access
 
 ### Issue: Hot Reload Not Working
 
@@ -322,6 +416,8 @@ See `lyra/FIX_BUILD_TOOLS.md` for detailed guide.
 - [x] WiFi network integration
 - [x] Battery status
 - [x] System information (CPU, RAM)
+- [x] Custom lock screen (optional)
+- [x] Taskbar hide/show functionality
 
 ### Phase 2 (Planned)
 - [ ] Window management (minimize, maximize, close)
@@ -330,6 +426,7 @@ See `lyra/FIX_BUILD_TOOLS.md` for detailed guide.
 - [ ] Desktop icons
 - [ ] File manager integration
 - [ ] Notification center
+- [ ] Shell replacement mode
 
 ### Phase 3 (Future)
 - [ ] Themes & customization panel
@@ -338,6 +435,8 @@ See `lyra/FIX_BUILD_TOOLS.md` for detailed guide.
 - [ ] Multi-monitor support
 - [ ] Auto-update system
 - [ ] Plugin architecture
+- [ ] Advanced lock screen features (biometrics, face recognition)
+- [ ] Complete Windows Explorer replacement
 
 ---
 
