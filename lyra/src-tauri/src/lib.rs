@@ -1408,23 +1408,22 @@ pub fn run() {
 
             #[cfg(target_os = "windows")]
             {
-                // Disable native Win+L so we can intercept it
-                toggle_native_lock(true);
+                // Disable native Win+L so we can intercept it, delayed by 3 seconds
+                std::thread::spawn(|| {
+                    std::thread::sleep(Duration::from_secs(3));
+                    toggle_native_lock(true);
+                });
                 // Start background thread listening for Win+L
                 start_hotkey_listener(app.handle().clone());
             }
 
-            // Prevent closing Lyra while the lock screen is active, and cleanup hooks on destroy.
+            // Prevent closing Lyra while the lock screen is active.
             if let Some(win) = app.get_webview_window("main") {
                 win.on_window_event(move |event| match event {
                     tauri::WindowEvent::CloseRequested { api, .. } => {
                         if lockdown::is_locked() {
                             api.prevent_close();
                         }
-                    }
-                    tauri::WindowEvent::Destroyed => {
-                        #[cfg(target_os = "windows")]
-                        toggle_native_lock(false);
                     }
                     _ => {}
                 });

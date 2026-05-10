@@ -16,7 +16,7 @@ use windows::core::HSTRING;
 use windows::Foundation::AsyncStatus;
 #[cfg(target_os = "windows")]
 use windows::Security::Credentials::UI::{
-    UserConsentVerificationResult, UserConsentVerifier, UserConsentVerifierAvailability,
+    UserConsentVerificationResult, UserConsentVerifier,
 };
 #[cfg(target_os = "windows")]
 use windows::Win32::Foundation::{BOOL, HWND, LPARAM};
@@ -111,7 +111,7 @@ pub fn get_current_username() -> String {
 
 /// Validate a password against the current Windows user account.
 #[tauri::command]
-pub fn validate_password(password: String) -> Result<bool, String> {
+pub async fn validate_password(password: String) -> Result<bool, String> {
     #[cfg(target_os = "windows")]
     {
         use windows::Win32::Foundation::*;
@@ -120,37 +120,41 @@ pub fn validate_password(password: String) -> Result<bool, String> {
         let username = std::env::var("USERNAME").unwrap_or_default();
         let domain = std::env::var("USERDOMAIN").unwrap_or_else(|_| ".".to_string());
 
-        let user_w: Vec<u16> = OsStr::new(&username)
-            .encode_wide()
-            .chain(Some(0))
-            .collect();
-        let domain_w: Vec<u16> = OsStr::new(&domain)
-            .encode_wide()
-            .chain(Some(0))
-            .collect();
-        let pass_w: Vec<u16> = OsStr::new(&password)
-            .encode_wide()
-            .chain(Some(0))
-            .collect();
+        let result = tokio::task::spawn_blocking(move || {
+            let user_w: Vec<u16> = std::ffi::OsStr::new(&username)
+                .encode_wide()
+                .chain(Some(0))
+                .collect();
+            let domain_w: Vec<u16> = std::ffi::OsStr::new(&domain)
+                .encode_wide()
+                .chain(Some(0))
+                .collect();
+            let pass_w: Vec<u16> = std::ffi::OsStr::new(&password)
+                .encode_wide()
+                .chain(Some(0))
+                .collect();
 
-        unsafe {
-            let mut token = HANDLE::default();
-            let result = LogonUserW(
-                windows::core::PCWSTR(user_w.as_ptr()),
-                windows::core::PCWSTR(domain_w.as_ptr()),
-                windows::core::PCWSTR(pass_w.as_ptr()),
-                LOGON32_LOGON_INTERACTIVE,
-                LOGON32_PROVIDER_DEFAULT,
-                &mut token,
-            );
+            unsafe {
+                let mut token = HANDLE::default();
+                let logon_result = LogonUserW(
+                    windows::core::PCWSTR(user_w.as_ptr()),
+                    windows::core::PCWSTR(domain_w.as_ptr()),
+                    windows::core::PCWSTR(pass_w.as_ptr()),
+                    LOGON32_LOGON_INTERACTIVE,
+                    LOGON32_PROVIDER_DEFAULT,
+                    &mut token,
+                );
 
-            if result.is_ok() {
-                let _ = CloseHandle(token);
-                Ok(true)
-            } else {
-                Ok(false)
+                if logon_result.is_ok() {
+                    let _ = CloseHandle(token);
+                    true
+                } else {
+                    false
+                }
             }
-        }
+        }).await.map_err(|e| e.to_string())?;
+
+        Ok(result)
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -160,17 +164,29 @@ pub fn validate_password(password: String) -> Result<bool, String> {
     }
 }
 
-/// Check whether Windows Hello (biometric service) is available.
-/// Uses the native Windows Runtime API directly.
+/// Check whether Windows Hello (biometric service) is physically available.
+/// Fallback to verifying actual PnP Biometric Hardware to avoid false-positives
+/// from Windows Hello PIN-only configured devices.
 #[tauri::command]
 pub async fn check_biometric_available() -> Result<bool, String> {
     #[cfg(target_os = "windows")]
     {
-        let available = UserConsentVerifier::CheckAvailabilityAsync()
-            .and_then(|operation| operation.get())
-            .map(|status| status == UserConsentVerifierAvailability::Available)
-            .unwrap_or(false);
-        Ok(available)
+        use std::os::windows::process::CommandExt;
+        
+        let output = std::process::Command::new("powershell")
+            .args([
+                "-NoProfile",
+                "-Command",
+                "(@(Get-PnpDevice -Class Biometric -ErrorAction SilentlyContinue | Where-Object Status -eq 'OK')).Count"
+            ])
+            .creation_flags(0x08000000) // CREATE_NO_WINDOW
+            .output()
+            .map_err(|e| e.to_string())?;
+            
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let count: i32 = stdout.trim().parse().unwrap_or(0);
+        
+        Ok(count > 0)
     }
 
     #[cfg(not(target_os = "windows"))]
