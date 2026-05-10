@@ -29,6 +29,23 @@ pub fn set_lock_state(app: tauri::AppHandle, locked: bool) {
             let _ = win.set_focus();
         } else {
             let _ = win.set_always_on_top(false);
+            
+            // Push Lyra physically to the back of the Z-order so it doesn't block inputs via transparent fullscreen
+            #[cfg(target_os = "windows")]
+            if let Ok(app_hwnd) = win.hwnd() {
+                use windows::Win32::Foundation::HWND;
+                use windows::Win32::UI::WindowsAndMessaging::{
+                    SetWindowPos, HWND_BOTTOM, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+                };
+                unsafe {
+                    let _ = SetWindowPos(
+                        HWND(app_hwnd.0 as usize as *mut std::ffi::c_void),
+                        HWND_BOTTOM,
+                        0, 0, 0, 0,
+                        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+                    );
+                }
+            }
         }
     }
 }

@@ -1463,6 +1463,11 @@ pub fn run() {
                             api.prevent_close();
                         }
                     }
+                    #[cfg(target_os = "windows")]
+                    tauri::WindowEvent::Destroyed => {
+                        // Restore native Win+L when exiting (requires final UAC)
+                        toggle_native_lock(false);
+                    }
                     _ => {}
                 });
             }

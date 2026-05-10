@@ -48,59 +48,32 @@ fn toggle_taskbar(show: bool) {
 }
 
 #[cfg(target_os = "windows")]
-unsafe extern "system" fn bring_windows_security_callback(hwnd: HWND, lparam: LPARAM) -> BOOL {
-    if !IsWindowVisible(hwnd).as_bool() {
-        return BOOL(1);
-    }
-
-    let text_len = GetWindowTextLengthW(hwnd);
-    if text_len == 0 {
-        return BOOL(1);
-    }
-
-    let mut title_buf = vec![0u16; (text_len + 1) as usize];
-    let actual_len = GetWindowTextW(hwnd, &mut title_buf);
-    if actual_len == 0 {
-        return BOOL(1);
-    }
-
-    let title = String::from_utf16_lossy(&title_buf[..actual_len as usize]);
-    if title.contains("Windows Security") {
-        let found = &mut *(lparam.0 as *mut bool);
-        *found = true;
-        let mut rect = windows::Win32::Foundation::RECT::default();
-        let _ = GetWindowRect(hwnd, &mut rect);
-        let w = rect.right - rect.left;
-        let h = rect.bottom - rect.top;
-        
-        // Force top-left positioning
-        let _ = MoveWindow(hwnd, 0, 0, w, h, true);
-        let _ = SetWindowPos(
-            hwnd,
-            HWND_TOPMOST,
-            0,
-            0,
-            0,
-            0,
-            SWP_NOSIZE | SWP_SHOWWINDOW,
-        );
-        let _ = SetForegroundWindow(hwnd);
-        return BOOL(0);
-    }
-
-    BOOL(1)
-}
-
-#[cfg(target_os = "windows")]
 fn bring_windows_security_to_front() -> bool {
-    let mut found = false;
     unsafe {
-        let _ = EnumWindows(
-            Some(bring_windows_security_callback),
-            LPARAM(&mut found as *mut bool as isize),
+        let hwnd = windows::Win32::UI::WindowsAndMessaging::FindWindowW(
+            windows::core::PCWSTR::null(),
+            windows::core::w!("Windows Security"),
         );
+        if let Ok(h) = hwnd {
+            if !h.0.is_null() {
+                let mut rect = windows::Win32::Foundation::RECT::default();
+                let _ = windows::Win32::UI::WindowsAndMessaging::GetWindowRect(h, &mut rect);
+                let w = rect.right - rect.left;
+                let h = rect.bottom - rect.top;
+                
+                let _ = windows::Win32::UI::WindowsAndMessaging::MoveWindow(h, 0, 0, w, h, true);
+                let _ = windows::Win32::UI::WindowsAndMessaging::SetWindowPos(
+                    h,
+                    windows::Win32::UI::WindowsAndMessaging::HWND_TOPMOST,
+                    0, 0, 0, 0,
+                    windows::Win32::UI::WindowsAndMessaging::SWP_NOSIZE | windows::Win32::UI::WindowsAndMessaging::SWP_SHOWWINDOW,
+                );
+                let _ = windows::Win32::UI::WindowsAndMessaging::SetForegroundWindow(h);
+                return true;
+            }
+        }
     }
-    found
+    false
 }
 
 /// Return the current Windows username.
