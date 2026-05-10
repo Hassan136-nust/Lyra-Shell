@@ -99,6 +99,43 @@ fn wide_null(value: &str) -> Vec<u16> {
 }
 
 #[cfg(target_os = "windows")]
+fn toggle_native_lock(disable: bool) {
+    let val = if disable { "1" } else { "0" };
+    let args = format!(
+        "add HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System /v DisableLockWorkstation /t REG_DWORD /d {} /f",
+        val
+    );
+    let _ = shell_execute_operation("runas", "reg.exe", Some(&args));
+}
+
+#[cfg(target_os = "windows")]
+fn start_hotkey_listener(app_handle: tauri::AppHandle) {
+    // using Tauri Manager to emit
+    use tauri::Emitter;
+    use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LWIN, VK_RWIN};
+    std::thread::spawn(move || {
+        let mut pressed = false;
+        loop {
+            unsafe {
+                let win_down = (GetAsyncKeyState(VK_LWIN.0 as i32) as i16) < 0
+                    || (GetAsyncKeyState(VK_RWIN.0 as i32) as i16) < 0;
+                let l_down = (GetAsyncKeyState(0x4C) as i16) < 0;
+
+                if win_down && l_down {
+                    if !pressed {
+                        pressed = true;
+                        let _ = app_handle.emit("trigger-lyra-lock", ());
+                    }
+                } else {
+                    pressed = false;
+                }
+            }
+            std::thread::sleep(Duration::from_millis(30)); // 30ms heartbeat
+        }
+    });
+}
+
+#[cfg(target_os = "windows")]
 fn shell_execute(target: &str, parameters: Option<&str>) -> Result<(), String> {
     shell_execute_operation("open", target, parameters)
 }
@@ -1369,14 +1406,27 @@ pub fn run() {
             let _ = LOG_PATH.set(log_path);
             append_diag_log("INFO", "Lyra started");
 
-            // Prevent closing Lyra while the lock screen is active.
+            #[cfg(target_os = "windows")]
+            {
+                // Disable native Win+L so we can intercept it
+                toggle_native_lock(true);
+                // Start background thread listening for Win+L
+                start_hotkey_listener(app.handle().clone());
+            }
+
+            // Prevent closing Lyra while the lock screen is active, and cleanup hooks on destroy.
             if let Some(win) = app.get_webview_window("main") {
-                win.on_window_event(move |event| {
-                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                win.on_window_event(move |event| match event {
+                    tauri::WindowEvent::CloseRequested { api, .. } => {
                         if lockdown::is_locked() {
                             api.prevent_close();
                         }
                     }
+                    tauri::WindowEvent::Destroyed => {
+                        #[cfg(target_os = "windows")]
+                        toggle_native_lock(false);
+                    }
+                    _ => {}
                 });
             }
 

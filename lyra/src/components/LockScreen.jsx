@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { useAppContext } from '../contexts/AppContext';
 
 /* ── Inline SVG Icons ─────────────────────────────────────────── */
 const FingerprintIcon = ({ size = 48 }) => (
@@ -33,6 +34,34 @@ const ArrowRightIcon = () => (
     </svg>
 );
 
+const BatteryIcon = ({ level, charging }) => (
+    <svg width="20" height="12" viewBox="0 0 28 16" fill="none">
+        <rect x="1" y="1" width="22" height="14" rx="3" stroke="currentColor" strokeWidth="1.5" />
+        <rect x="3" y="3" width={Math.max(1, (level / 100) * 18)} height="10" rx="1"
+            fill={level > 20 ? 'currentColor' : 'var(--ctp-red)'} />
+        <rect x="23" y="5" width="3" height="6" rx="1.5" fill="currentColor" />
+        {charging && <text x="10" y="13" fontSize="11" fill="var(--ctp-green)" textAnchor="middle" style={{ fontWeight: 'bold' }}>⚡</text>}
+    </svg>
+);
+
+const ShutdownIcon = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+        <path d="M18.36 6.64a9 9 0 1 1-12.73 0" /><line x1="12" y1="2" x2="12" y2="12" />
+    </svg>
+);
+
+const SleepIcon = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+    </svg>
+);
+
+const RestartIcon = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+        <polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+    </svg>
+);
+
 /* ── Particle Background ──────────────────────────────────────── */
 const PARTICLE_COUNT = 150;
 
@@ -59,6 +88,11 @@ const LockScreen = ({ isLocked, onUnlock, biometricAvailable }) => {
     const [unlocking, setUnlocking] = useState(false);
     const [shakeKey, setShakeKey] = useState(0);
     const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+    const [batteryLevel, setBatteryLevel] = useState(100);
+    const [isCharging, setIsCharging] = useState(false);
+    const [showPowerMenu, setShowPowerMenu] = useState(false);
+    const { runAction } = useAppContext();
+    const powerMenuRef = useRef(null);
 
     const handleMouseMove = (e) => {
         setMousePos({
@@ -217,6 +251,45 @@ const LockScreen = ({ isLocked, onUnlock, biometricAvailable }) => {
         window.addEventListener('keydown', handleKeyPress);
         return () => window.removeEventListener('keydown', handleKeyPress);
     }, [isLocked, unlocking, showAuthCard, fingerprintMode, handleBiometric, handleSubmit]);
+
+    // Battery Hook
+    useEffect(() => {
+        let battery = null;
+        let disposed = false;
+        let update = null;
+
+        if ('getBattery' in navigator) {
+            navigator.getBattery().then((b) => {
+                if (disposed) return;
+                battery = b;
+                update = () => {
+                    setBatteryLevel(Math.round(b.level * 100));
+                    setIsCharging(b.charging);
+                };
+                update();
+                b.addEventListener('levelchange', update);
+                b.addEventListener('chargingchange', update);
+            });
+        }
+        return () => {
+            disposed = true;
+            if (battery && update) {
+                battery.removeEventListener('levelchange', update);
+                battery.removeEventListener('chargingchange', update);
+            }
+        };
+    }, []);
+
+    // Power Menu Outside Click
+    useEffect(() => {
+        const handler = (e) => {
+            if (powerMenuRef.current && !powerMenuRef.current.contains(e.target)) {
+                setShowPowerMenu(false);
+            }
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, []);
 
     useEffect(() => () => {
         biometricActiveRef.current = false;
@@ -449,12 +522,59 @@ const LockScreen = ({ isLocked, onUnlock, biometricAvailable }) => {
                         )}
                     </motion.div>
 
-                    {/* Bottom hint */}
-                    <div className="lockscreen-hint">
-                        <span>Lyra Shell</span>
-                        <span className="lockscreen-hint-sep">·</span>
-                        <span>Arch × macOS</span>
-                    </div>
+                    {/* Bottom Elements (Hidden until Auth Card is shown) */}
+                    <AnimatePresence>
+                        {showAuthCard && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: 20 }}
+                                transition={{ duration: 0.4, delay: 0.2, ease: 'easeOut' }}
+                                style={{ width: '100%', pointerEvents: 'none' }}
+                            >
+                                {/* Bottom hint */}
+                                <div className="lockscreen-hint">
+                                    <span>Lyra Shell</span>
+                                    <span className="lockscreen-hint-sep">·</span>
+                                    <span>Arch × macOS</span>
+                                </div>
+
+                                {/* Bottom Right Controls (Battery + Power) */}
+                                <div className="lockscreen-controls" style={{ pointerEvents: 'auto' }}>
+                                    <div className="lockscreen-battery">
+                                        <BatteryIcon level={batteryLevel} charging={isCharging} />
+                                        <span>{batteryLevel}%</span>
+                                    </div>
+                                    <div className="lockscreen-power-wrapper" ref={powerMenuRef}>
+                                        <button className="lockscreen-power-btn" onClick={() => setShowPowerMenu(!showPowerMenu)}>
+                                            <ShutdownIcon />
+                                        </button>
+                                        <AnimatePresence>
+                                            {showPowerMenu && (
+                                                <motion.div
+                                                    className="lockscreen-power-menu"
+                                                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                    exit={{ opacity: 0, scale: 0.95, pointerEvents: 'none' }}
+                                                    transition={{ duration: 0.15 }}
+                                                >
+                                                    <button onClick={() => runAction('sleep')}>
+                                                        <SleepIcon /> Sleep
+                                                    </button>
+                                                    <button onClick={() => runAction('restart')}>
+                                                        <RestartIcon /> Restart
+                                                    </button>
+                                                    <button className="danger" onClick={() => runAction('shutdown')}>
+                                                        <ShutdownIcon /> Shut down
+                                                    </button>
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                 </motion.div>
             )}
         </AnimatePresence>

@@ -165,6 +165,21 @@ export const AppProvider = ({ children }) => {
     await tauriInvoke('run_system_action', { action });
   }, [lockScreen]);
 
+  useEffect(() => {
+    let unlistenFn = null;
+    import('@tauri-apps/api/event').then(({ listen }) => {
+      listen('trigger-lyra-lock', () => {
+        lockScreen();
+      }).then(unlisten => {
+        unlistenFn = unlisten;
+      });
+    }).catch(console.error);
+
+    return () => {
+      if (unlistenFn) unlistenFn();
+    };
+  }, [lockScreen]);
+
   const launchApp = useCallback(async (path) => {
     await tauriInvoke('launch_app', { path });
   }, []);
