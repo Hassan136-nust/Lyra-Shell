@@ -65,6 +65,36 @@ export const AppProvider = ({ children }) => {
     memory_percent: 0,
   });
   const [activeWorkspace, setActiveWorkspace] = useState(1);
+  const [isLocked, setIsLocked] = useState(false);
+
+  // Listen for Win+L hotkey from the backend
+  useEffect(() => {
+    let unlisten;
+    (async () => {
+      try {
+        const { listen } = await import('@tauri-apps/api/event');
+        unlisten = await listen('trigger-lock', () => {
+          setIsLocked(true);
+          tauriInvoke('set_lock_state', { locked: true });
+        });
+      } catch { }
+    })();
+    return () => { if (unlisten) unlisten(); };
+  }, []);
+
+  // Block dangerous keyboard shortcuts when locked
+  useEffect(() => {
+    if (!isLocked) return;
+    const handler = (e) => {
+      // Block Alt+F4, Ctrl+W, Escape, Win key combos
+      if (e.altKey && e.key === 'F4') e.preventDefault();
+      if (e.ctrlKey && (e.key === 'w' || e.key === 'W')) e.preventDefault();
+      if (e.key === 'Escape') e.preventDefault();
+      if (e.metaKey) e.preventDefault();
+    };
+    window.addEventListener('keydown', handler, true);
+    return () => window.removeEventListener('keydown', handler, true);
+  }, [isLocked]);
 
   const sameWindow = (a, b) => {
     if (!a && !b) return true;
@@ -125,9 +155,23 @@ export const AppProvider = ({ children }) => {
     await tauriInvoke('close_window', { hwnd });
   }, []);
 
-  const runAction = useCallback(async (action) => {
-    await tauriInvoke('run_system_action', { action });
+  const lockScreen = useCallback(() => {
+    setIsLocked(true);
+    tauriInvoke('set_lock_state', { locked: true });
   }, []);
+
+  const unlockScreen = useCallback(() => {
+    setIsLocked(false);
+    tauriInvoke('set_lock_state', { locked: false });
+  }, []);
+
+  const runAction = useCallback(async (action) => {
+    if (action === 'lock') {
+      lockScreen();
+      return;
+    }
+    await tauriInvoke('run_system_action', { action });
+  }, [lockScreen]);
 
   const launchApp = useCallback(async (path) => {
     await tauriInvoke('launch_app', { path });
@@ -145,6 +189,9 @@ export const AppProvider = ({ children }) => {
       closeWindow,
       runAction,
       launchApp,
+      isLocked,
+      lockScreen,
+      unlockScreen,
     }}>
       {children}
     </AppContext.Provider>

@@ -1,3 +1,6 @@
+mod auth;
+mod lockdown;
+
 use std::collections::{HashMap, HashSet};
 use std::ffi::c_void;
 use std::fs::OpenOptions;
@@ -1365,6 +1368,21 @@ pub fn run() {
                 .join("lyra.log");
             let _ = LOG_PATH.set(log_path);
             append_diag_log("INFO", "Lyra started");
+
+            // Initialise Win+L interception and close prevention.
+            lockdown::init_lockdown(app.handle());
+
+            // Prevent closing Lyra while the lock screen is active.
+            if let Some(win) = app.get_webview_window("main") {
+                win.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        if lockdown::is_locked() {
+                            api.prevent_close();
+                        }
+                    }
+                });
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -1393,7 +1411,12 @@ pub fn run() {
             get_mute,
             set_mute,
             log_frontend_error,
-            get_diagnostics_info
+            get_diagnostics_info,
+            auth::get_current_username,
+            auth::validate_password,
+            auth::check_biometric_available,
+            auth::request_biometric_auth,
+            lockdown::set_lock_state
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|error| {
@@ -1402,4 +1425,7 @@ pub fn run() {
                 format!("error while running tauri application: {error}"),
             );
         });
+
+    // Restore Win+L on exit.
+    lockdown::cleanup_lockdown();
 }

@@ -1,7 +1,13 @@
 import TopBar from './components/TopBar';
 import Dock from './components/Dock';
-import { AppProvider } from './contexts/AppContext';
+import LockScreen from './components/LockScreen';
+import { AppProvider, useAppContext } from './contexts/AppContext';
 import './App.css';
+
+function LockOverlay() {
+  const { isLocked, unlockScreen } = useAppContext();
+  return <LockScreen isLocked={isLocked} onUnlock={unlockScreen} />;
+}
 
 function App() {
   return (
@@ -26,6 +32,9 @@ function App() {
 
         {/* Bottom Dock — macOS style */}
         <Dock />
+
+        {/* Lock Screen Overlay */}
+        <LockOverlay />
       </div>
     </AppProvider>
   );
