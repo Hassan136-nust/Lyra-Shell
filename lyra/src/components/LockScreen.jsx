@@ -135,12 +135,16 @@ const LockScreen = ({ isLocked, onUnlock, biometricAvailable }) => {
         }
     }, [isLocked]);
 
-    // Focus password input when switching to password mode
+    // Focus password input when authentication UI requires it
     useEffect(() => {
-        if (isLocked && showPasswordMode && inputRef.current) {
-            setTimeout(() => inputRef.current?.focus(), 200);
+        if (!isLocked || unlocking) return;
+        // If Auth screen is visible and fingerprint is either completely unavailable
+        // or explicitly bypassed, demand strict focus onto the password input.
+        if (showAuthCard && !fingerprintMode && inputRef.current) {
+            const t = setTimeout(() => inputRef.current?.focus(), 250);
+            return () => clearTimeout(t);
         }
-    }, [isLocked, showPasswordMode]);
+    }, [isLocked, showAuthCard, fingerprintMode, unlocking]);
 
     const handleSubmit = useCallback(async (e) => {
         e?.preventDefault();
