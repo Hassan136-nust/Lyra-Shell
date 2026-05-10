@@ -1428,6 +1428,29 @@ fn get_diagnostics_info() -> DiagnosticsInfo {
 
 // ── Entry point ──────────────────────────────────────────────────
 
+#[cfg(target_os = "windows")]
+static mut KEYBOARD_HOOK: Option<windows::Win32::UI::WindowsAndMessaging::HHOOK> = None;
+
+#[cfg(target_os = "windows")]
+unsafe extern "system" fn keyboard_hook_proc(
+    code: i32,
+    wparam: windows::Win32::Foundation::WPARAM,
+    lparam: windows::Win32::Foundation::LPARAM,
+) -> windows::Win32::Foundation::LRESULT {
+    use windows::Win32::UI::WindowsAndMessaging::{CallNextHookEx, KBDLLHOOKSTRUCT};
+    
+    // If Lyra is locked, intercept Windows Keys (VK_LWIN = 0x5B, VK_RWIN = 0x5C)
+    if code >= 0 && lockdown::is_locked() {
+        let kbd = &*(lparam.0 as *const KBDLLHOOKSTRUCT);
+        let key = kbd.vkCode;
+        if key == 0x5B || key == 0x5C {
+            // Swallow the key fully
+            return windows::Win32::Foundation::LRESULT(1);
+        }
+    }
+    CallNextHookEx(None, code, wparam, lparam)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     install_panic_hook();
@@ -1453,6 +1476,22 @@ pub fn run() {
                 });
                 // Start background thread listening for Win+L
                 start_hotkey_listener(app.handle().clone());
+                
+                // Mount the Low-Level OS hook on the main kernel thread to trap the Start Menu
+                use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+                use windows::Win32::UI::WindowsAndMessaging::{SetWindowsHookExW, WH_KEYBOARD_LL};
+                unsafe {
+                    if let Ok(module) = GetModuleHandleW(windows::core::PCWSTR::null()) {
+                        if let Ok(hook) = SetWindowsHookExW(
+                            WH_KEYBOARD_LL,
+                            Some(keyboard_hook_proc),
+                            module,
+                            0,
+                        ) {
+                            KEYBOARD_HOOK = Some(hook);
+                        }
+                    }
+                }
             }
 
             // Prevent closing Lyra while the lock screen is active.

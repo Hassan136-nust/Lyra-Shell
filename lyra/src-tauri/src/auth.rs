@@ -3,8 +3,6 @@
 // and Windows Hello biometric availability.
 
 #[cfg(target_os = "windows")]
-use std::ffi::OsStr;
-#[cfg(target_os = "windows")]
 use std::os::windows::ffi::OsStrExt;
 
 #[cfg(target_os = "windows")]
@@ -18,13 +16,7 @@ use windows::Foundation::AsyncStatus;
 use windows::Security::Credentials::UI::{
     UserConsentVerificationResult, UserConsentVerifier,
 };
-#[cfg(target_os = "windows")]
-use windows::Win32::Foundation::HWND;
-#[cfg(target_os = "windows")]
-use windows::Win32::UI::WindowsAndMessaging::{
-    SetForegroundWindow, SetWindowPos, HWND_TOPMOST, SWP_NOSIZE, SWP_SHOWWINDOW,
-    FindWindowW, FindWindowExW, ShowWindow, SW_HIDE, SW_SHOW, MoveWindow, GetWindowRect
-};
+
 
 
 
