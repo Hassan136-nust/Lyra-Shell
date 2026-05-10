@@ -740,43 +740,81 @@ fn launch_app(path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-fn get_app_icon(process_path: String) -> Result<String, String> {
+fn get_app_icons_batch(process_paths: Vec<String>) -> Result<std::collections::HashMap<String, String>, String> {
     #[cfg(target_os = "windows")]
     {
-        if process_path.trim().is_empty() {
-            return Err("empty process path".to_string());
+        if process_paths.is_empty() {
+            return Ok(std::collections::HashMap::new());
         }
 
-        let escaped = process_path.replace('\'', "''");
+        let paths_json = serde_json::to_string(&process_paths).unwrap_or_else(|_| "[]".to_string());
+        
         let script = format!(
-            "Add-Type -AssemblyName System.Drawing; \
-            $icon=[System.Drawing.Icon]::ExtractAssociatedIcon('{escaped}'); \
-            if($null -eq $icon){{exit 1}}; \
-            $bmp=$icon.ToBitmap(); \
-            $ms=New-Object System.IO.MemoryStream; \
-            $bmp.Save($ms,[System.Drawing.Imaging.ImageFormat]::Png); \
-            [Convert]::ToBase64String($ms.ToArray())"
+            r#"
+            Add-Type -AssemblyName System.Drawing
+            Add-Type -TypeDefinition @'
+            using System;
+            using System.Runtime.InteropServices;
+            using System.Drawing;
+            public class LyraIcon {{
+                [DllImport("shell32.dll", CharSet = CharSet.Auto)]
+                public static extern IntPtr SHGetFileInfo(string pszPath, uint dwFileAttributes, ref SHFILEINFO psfi, uint cbFileInfo, uint uFlags);
+                [DllImport("shell32.dll")]
+                public static extern int SHGetImageList(int iImageList, ref Guid riid, out IntPtr ppv);
+                [DllImport("comctl32.dll")]
+                public static extern IntPtr ImageList_GetIcon(IntPtr himl, int i, uint flags);
+                [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+                public struct SHFILEINFO {{ public IntPtr hIcon; public int iIcon; public uint dwAttributes; [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)] public string szDisplayName; [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 80)] public string szTypeName; }};
+                public static string GetBase64(string path) {{
+                    try {{
+                        SHFILEINFO shinfo = new SHFILEINFO();
+                        SHGetFileInfo(path, 0, ref shinfo, (uint)Marshal.SizeOf(shinfo), 0x4000);
+                        Guid iid = new Guid("46EB5926-582E-4017-9FDF-E8998DAA0950");
+                        SHGetImageList(4, ref iid, out IntPtr iml);
+                        Icon icon = null;
+                        if (iml != IntPtr.Zero) {{
+                            IntPtr h = ImageList_GetIcon(iml, shinfo.iIcon, 0);
+                            if (h != IntPtr.Zero) icon = Icon.FromHandle(h);
+                        }}
+                        if (icon == null) icon = Icon.ExtractAssociatedIcon(path);
+                        if (icon == null) return "";
+                        using (Bitmap bmp = icon.ToBitmap())
+                        using (System.IO.MemoryStream ms = new System.IO.MemoryStream()) {{
+                            bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+                            return Convert.ToBase64String(ms.ToArray());
+                        }}
+                    }} catch {{ return ""; }}
+                }}
+            }}
+'@
+            $paths = '{}' | ConvertFrom-Json
+            $result = @{{}}
+            foreach ($p in $paths) {{
+                $b64 = [LyraIcon]::GetBase64($p)
+                if ($b64) {{ $result[$p] = "data:image/png;base64," + $b64 }}
+            }}
+            $result | ConvertTo-Json -Depth 2
+            "#, 
+            paths_json
         );
 
         let output = command_no_window("powershell")
             .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", &script])
             .output()
-            .map_err(|e| format!("failed to extract icon: {e}"))?;
+            .map_err(|e| format!("failed to extract icons: {e}"))?;
 
         if !output.status.success() {
-            return Err("icon extraction command failed".to_string());
+            return Err("icon batch extraction command failed".to_string());
         }
 
-        let b64 = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        if b64.is_empty() {
-            return Err("empty icon result".to_string());
-        }
-
-        Ok(format!("data:image/png;base64,{b64}"))
+        let out_str = String::from_utf8_lossy(&output.stdout);
+        let parsed: std::collections::HashMap<String, String> = serde_json::from_str(&out_str).unwrap_or_default();
+        
+        Ok(parsed)
     }
     #[cfg(not(target_os = "windows"))]
     {
-        Err("not on windows".to_string())
+        Ok(std::collections::HashMap::new())
     }
 }
 
@@ -1442,7 +1480,7 @@ pub fn run() {
             close_window,
             get_system_info,
             launch_app,
-            get_app_icon,
+            get_app_icons_batch,
             list_wifi_networks,
             connect_wifi,
             connect_wifi_with_password,

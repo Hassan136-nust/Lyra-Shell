@@ -73,6 +73,39 @@ const processIconMap = {
       <path d="M24 24 L40 32 L24 40Z" fill="#fff"/>
     </svg>`),
   },
+  'chrome.exe': {
+    svg: createSvgIcon(`<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="32" cy="32" r="28" fill="#fbbc05"/>
+      <path d="M32 4 L56.24 18 C56.24 18 46.5 4 32 4 Z" fill="#ea4335"/>
+      <path d="M32 60 C16.5 60 4 47.5 4 32 L28 32 C28 47.5 32 60 32 60 Z" fill="#34a853"/>
+      <path d="M4 32 C4 16.5 16.5 4 32 4 L32 28 C16.5 28 4 32 4 32 Z" fill="#ea4335"/>
+      <circle cx="32" cy="32" r="12" fill="#fff"/>
+      <circle cx="32" cy="32" r="9" fill="#4285f4"/>
+    </svg>`),
+  },
+  'msedge.exe': {
+    svg: createSvgIcon(`<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <path d="M32 4 C16.5 4 4 16.5 4 32 C4 47.5 16.5 60 32 60 C47.5 60 60 47.5 60 32 C60 16.5 47.5 4 32 4 Z" fill="#0078d7"/>
+      <path d="M16 32 C16 20 28 20 28 20 C28 20 20 28 20 36 C20 44 32 48 40 40 C48 32 48 24 48 24 C48 24 48 40 32 52 C20 52 16 44 16 32 Z" fill="#1cf2a2"/>
+      <path d="M32 12 C44 12 52 24 52 32 C52 44 44 48 44 48 C44 48 52 40 52 28 C52 16 40 16 40 16 C40 16 48 20 48 28 C48 36 36 40 28 36 C20 32 24 16 32 12 Z" fill="#00bcf2"/>
+    </svg>`),
+  },
+  'discord.exe': {
+    svg: createSvgIcon(`<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <rect width="64" height="64" rx="14" fill="#5865F2"/>
+      <path d="M46 22 C42 20 38 19 38 19 L37 21 C42 22 44 24 44 24 C44 24 40 21 32 20 C24 21 20 24 20 24 C20 24 22 22 27 21 L26 19 C26 19 22 20 18 22 C14 34 16 46 16 46 C20 50 26 51 26 51 L28 48 C24 47 22 45 22 45 C22 45 24 46 32 47 C40 46 42 45 42 45 C42 45 40 47 36 48 L38 51 C38 51 44 50 48 46 C48 46 50 34 46 22 Z" fill="#fff"/>
+      <circle cx="27" cy="34" r="3" fill="#5865F2"/>
+      <circle cx="37" cy="34" r="3" fill="#5865F2"/>
+    </svg>`),
+  },
+  'spotify.exe': {
+    svg: createSvgIcon(`<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="32" cy="32" r="28" fill="#1DB954"/>
+      <path d="M18 42 C24 39 36 39 44 42" stroke="#191414" stroke-width="3" stroke-linecap="round" fill="none"/>
+      <path d="M16 34 C24 30 40 30 48 35" stroke="#191414" stroke-width="4" stroke-linecap="round" fill="none"/>
+      <path d="M14 24 C26 18 44 19 52 26" stroke="#191414" stroke-width="5" stroke-linecap="round" fill="none"/>
+    </svg>`),
+  },
 };
 
 
@@ -222,25 +255,24 @@ const Dock = () => {
           .map((app) => app?.process_path)
           .filter((path) => typeof path === 'string' && path.trim().length > 0),
       ),
-    ).slice(0, 8);
+    );
 
-    candidates.forEach((processPath) => {
-      if (realIcons[processPath] || iconRequestsRef.current.has(processPath)) {
-        return;
-      }
-      iconRequestsRef.current.add(processPath);
+    // Only batch request what we actually don't have yet
+    const needed = candidates.filter((path) => !realIcons[path] && !iconRequestsRef.current.has(path));
+    if (needed.length === 0) return;
 
-      invoke('get_app_icon', { processPath })
-        .then((iconDataUrl) => {
-          if (!disposed && typeof iconDataUrl === 'string' && iconDataUrl.startsWith('data:image/')) {
-            setRealIcons((prev) => ({ ...prev, [processPath]: iconDataUrl }));
-          }
-        })
-        .catch(() => { })
-        .finally(() => {
-          iconRequestsRef.current.delete(processPath);
-        });
-    });
+    needed.forEach((p) => iconRequestsRef.current.add(p));
+
+    invoke('get_app_icons_batch', { processPaths: needed })
+      .then((results) => {
+        if (!disposed && results) {
+          setRealIcons((prev) => ({ ...prev, ...results }));
+        }
+      })
+      .catch((e) => console.error("Dock icon fetch error:", e))
+      .finally(() => {
+        needed.forEach((p) => iconRequestsRef.current.delete(p));
+      });
 
     return () => {
       disposed = true;
@@ -315,9 +347,14 @@ const Dock = () => {
 
               {/* Running Apps */}
               {uniqueRunning.map((app) => {
-                const fallbackVisual = getAppVisual(app.process_name);
+                const processName = app.process_name || '';
+                const fallbackVisual = getAppVisual(processName);
+                const hasHardcodedSvg = !!processIconMap[processName];
                 const realIcon = app.process_path ? realIcons[app.process_path] : null;
-                const visual = realIcon ? { ...fallbackVisual, svg: realIcon } : fallbackVisual;
+
+                // CRITICAL: Prioritize High-Res hardcoded SVGs over blurry RealIcons!
+                const visual = hasHardcodedSvg ? fallbackVisual : (realIcon ? { ...fallbackVisual, svg: realIcon } : fallbackVisual);
+
                 const isActive = activeWindow?.pid === app.pid;
                 const displayName = app.title?.length > 30 ? app.title.slice(0, 30) + '…' : app.title;
                 return (
