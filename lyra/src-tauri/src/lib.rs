@@ -1506,6 +1506,15 @@ pub fn run() {
                     tauri::WindowEvent::Destroyed => {
                         // Restore native Win+L when exiting (requires final UAC)
                         toggle_native_lock(false);
+                        
+                        unsafe {
+                            if let Some(hook) = KEYBOARD_HOOK.take() {
+                                let _ = windows::Win32::UI::WindowsAndMessaging::UnhookWindowsHookEx(hook);
+                            }
+                        }
+                        
+                        // Restore taskbar
+                        lockdown::set_taskbar_visible(true);
                     }
                     _ => {}
                 });

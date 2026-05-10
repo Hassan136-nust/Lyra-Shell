@@ -27,14 +27,34 @@ pub fn set_biometric_active(active: bool) {
 pub fn set_taskbar_visible(visible: bool) {
     use windows::Win32::Foundation::HWND;
     use windows::Win32::UI::WindowsAndMessaging::{
-        FindWindowW, FindWindowExW, ShowWindow, SW_HIDE, SW_SHOW,
+        FindWindowW, FindWindowExW, 
+        GetWindowLongW, SetWindowLongW, GWL_EXSTYLE, WS_EX_LAYERED,
+        SetLayeredWindowAttributes, LWA_ALPHA,
     };
+
+    unsafe fn set_transparent(hwnd: HWND, visible: bool) {
+        if hwnd.0.is_null() { return; }
+        
+        let exstyle = GetWindowLongW(hwnd, GWL_EXSTYLE);
+        if !visible {
+            // Apply layered window style to enable transparency
+            SetWindowLongW(hwnd, GWL_EXSTYLE, exstyle | (WS_EX_LAYERED.0 as i32));
+            // Set Alpha to 0 (completely invisible)
+            SetLayeredWindowAttributes(hwnd, windows::Win32::Foundation::COLORREF(0), 0, LWA_ALPHA).ok();
+        } else {
+            // Restore visibility by setting Alpha to 255
+            SetWindowLongW(hwnd, GWL_EXSTYLE, exstyle | (WS_EX_LAYERED.0 as i32));
+            SetLayeredWindowAttributes(hwnd, windows::Win32::Foundation::COLORREF(0), 255, LWA_ALPHA).ok();
+            // Alternatively remove WS_EX_LAYERED, but keeping it is safer for stability
+        }
+    }
+
     unsafe {
         if let Ok(taskbar) = FindWindowW(
             windows::core::w!("Shell_TrayWnd"),
             windows::core::PCWSTR::null(),
         ) {
-            let _ = ShowWindow(taskbar, if visible { SW_SHOW } else { SW_HIDE });
+            set_transparent(taskbar, visible);
         }
         let mut sec = FindWindowExW(
             HWND::default(), HWND::default(),
@@ -42,7 +62,7 @@ pub fn set_taskbar_visible(visible: bool) {
             windows::core::PCWSTR::null(),
         );
         while let Ok(sec_hwnd) = sec {
-            let _ = ShowWindow(sec_hwnd, if visible { SW_SHOW } else { SW_HIDE });
+            set_transparent(sec_hwnd, visible);
             sec = FindWindowExW(
                 HWND::default(), sec_hwnd,
                 windows::core::w!("Shell_SecondaryTrayWnd"),
