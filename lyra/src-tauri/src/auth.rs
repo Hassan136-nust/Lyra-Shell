@@ -17,9 +17,6 @@ use windows::Security::Credentials::UI::{
     UserConsentVerificationResult, UserConsentVerifier,
 };
 
-
-
-
 #[cfg(target_os = "windows")]
 fn bring_windows_security_to_front() -> bool {
     unsafe {

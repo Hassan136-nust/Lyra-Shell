@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
@@ -63,7 +63,7 @@ const RestartIcon = () => (
 );
 
 /* ── Particle Background ──────────────────────────────────────── */
-const PARTICLE_COUNT = 150;
+const PARTICLE_COUNT = 50;
 
 const createParticles = () =>
     Array.from({ length: PARTICLE_COUNT }, (_, i) => ({
@@ -138,13 +138,12 @@ const LockScreen = ({ isLocked, onUnlock, biometricAvailable }) => {
     // Focus password input when authentication UI requires it
     useEffect(() => {
         if (!isLocked || unlocking) return;
-        // If Auth screen is visible and fingerprint is either completely unavailable
-        // or explicitly bypassed, demand strict focus onto the password input.
         if (showAuthCard && !fingerprintMode && inputRef.current) {
-            const t = setTimeout(() => inputRef.current?.focus(), 250);
+            const t = setTimeout(() => inputRef.current?.focus(), 50);
             return () => clearTimeout(t);
         }
     }, [isLocked, showAuthCard, fingerprintMode, unlocking]);
+
 
     const handleSubmit = useCallback(async (e) => {
         e?.preventDefault();
@@ -229,6 +228,12 @@ const LockScreen = ({ isLocked, onUnlock, biometricAvailable }) => {
         }
     }, [biometricAvailable, biometricChecking, isLocked, showPasswordMode]);
 
+    // Auto-trigger biometric immediately when auth card appears in fingerprint mode
+    useEffect(() => {
+        if (!isLocked || unlocking || !showAuthCard || !fingerprintMode) return;
+        handleBiometric();
+    }, [isLocked, showAuthCard, fingerprintMode, unlocking, handleBiometric]);
+
     // Show auth card on Enter key only
     useEffect(() => {
         if (!isLocked || unlocking) return;
@@ -302,10 +307,14 @@ const LockScreen = ({ isLocked, onUnlock, biometricAvailable }) => {
         }
     }, []);
 
-    const formatTime = (d) =>
-        d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
-    const formatDate = (d) =>
-        d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    const timeStr = useMemo(() =>
+        time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
+        [Math.floor(time.getTime() / 1000)]
+    );
+    const dateStr = useMemo(() =>
+        time.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }),
+        [time.toDateString()]
+    );
 
     return (
         <AnimatePresence>
@@ -366,14 +375,14 @@ const LockScreen = ({ isLocked, onUnlock, biometricAvailable }) => {
                         <div className="lockscreen-clock">
                             <motion.div
                                 className="lockscreen-time"
-                                key={formatTime(time)}
+                                key={timeStr}
                                 initial={{ opacity: 0.7, y: 4 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ duration: 0.3 }}
                             >
-                                {formatTime(time)}
+                                {timeStr}
                             </motion.div>
-                            <div className="lockscreen-date">{formatDate(time)}</div>
+                            <div className="lockscreen-date">{dateStr}</div>
                         </div>
                     </motion.div>
 
