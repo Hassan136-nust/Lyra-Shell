@@ -745,6 +745,11 @@ fn launch_app(path: String) -> Result<String, String> {
 fn get_app_icons_batch(process_paths: Vec<String>) -> Result<std::collections::HashMap<String, String>, String> {
     #[cfg(target_os = "windows")]
     {
+        use windows::Win32::UI::Shell::{IShellItemImageFactory, SHCreateItemFromParsingName};
+        use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED};
+        use windows::Win32::Graphics::Gdi::{GetDIBits, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS};
+        use windows::core::PWSTR;
+        
         if process_paths.is_empty() {
             return Ok(std::collections::HashMap::new());
         }
@@ -769,57 +774,98 @@ fn get_app_icons_batch(process_paths: Vec<String>) -> Result<std::collections::H
             return Ok(result);
         }
 
-        // Optimized PowerShell script with parallel processing and smaller icons
-        let paths_json = serde_json::to_string(&needed_paths).unwrap_or_else(|_| "[]".to_string());
-        
-        let script = format!(
-            r#"
-            Add-Type -AssemblyName System.Drawing
-            $paths = '{}' | ConvertFrom-Json
-            $result = @{{}}
-            $paths | ForEach-Object -Parallel {{
-                try {{
-                    $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($_)
-                    if ($icon) {{
-                        # Use smaller 32x32 icon for better performance
-                        $bmp = $icon.ToBitmap()
-                        $resized = New-Object System.Drawing.Bitmap(32, 32)
-                        $graphics = [System.Drawing.Graphics]::FromImage($resized)
-                        $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-                        $graphics.DrawImage($bmp, 0, 0, 32, 32)
-                        $ms = New-Object System.IO.MemoryStream
-                        $resized.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
-                        $b64 = [Convert]::ToBase64String($ms.ToArray())
-                        $ms.Dispose()
-                        $resized.Dispose()
-                        $graphics.Dispose()
-                        $bmp.Dispose()
-                        $icon.Dispose()
-                        $using:result[$_] = "data:image/png;base64," + $b64
-                    }}
-                }} catch {{}}
-            }} -ThrottleLimit 4
-            $result | ConvertTo-Json -Depth 2 -Compress
-            "#, 
-            paths_json
-        );
-
-        let output = command_no_window("powershell")
-            .args(["-NoProfile", "-Command", &script])
-            .output()
-            .map_err(|e| format!("failed to extract icons: {e}"))?;
-
-        if !output.status.success() {
-            return Ok(result); // Return cached results even if fetch fails
-        }
-
-        let out_str = String::from_utf8_lossy(&output.stdout);
-        let parsed: std::collections::HashMap<String, String> = serde_json::from_str(&out_str).unwrap_or_default();
-        
-        // Update cache and result
-        for (path, icon) in parsed {
-            cache_lock.insert(path.clone(), icon.clone());
-            result.insert(path, icon);
+        // Extract icons using IShellItemImageFactory (native Windows COM API)
+        // This is the PROPER way to get high-quality icons - same as Seelen UI
+        for path in needed_paths {
+            unsafe {
+                // Initialize COM for this thread
+                let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+                
+                let icon_result = (|| -> Result<String, String> {
+                    // Convert path to wide string
+                    let path_wide: Vec<u16> = path.encode_utf16().chain(Some(0)).collect();
+                    
+                    // Create shell item from path
+                    let shell_item: IShellItemImageFactory = SHCreateItemFromParsingName(
+                        PWSTR(path_wide.as_ptr() as *mut u16),
+                        None,
+                    ).map_err(|e| format!("Failed to create shell item: {e}"))?;
+                    
+                    // Request 256x256 icon (high quality)
+                    let size = windows::Win32::Foundation::SIZE { cx: 256, cy: 256 };
+                    let flags = windows::Win32::UI::Shell::SIIGBF_ICONONLY;
+                    
+                    let hbitmap = shell_item.GetImage(size, flags)
+                        .map_err(|e| format!("Failed to get image: {e}"))?;
+                    
+                    // Convert HBITMAP to PNG base64
+                    let dc = windows::Win32::Graphics::Gdi::GetDC(windows::Win32::Foundation::HWND(std::ptr::null_mut()));
+                    
+                    let mut bmp_info = BITMAPINFO {
+                        bmiHeader: BITMAPINFOHEADER {
+                            biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+                            biWidth: 256,
+                            biHeight: -256, // Top-down
+                            biPlanes: 1,
+                            biBitCount: 32,
+                            biCompression: BI_RGB.0,
+                            biSizeImage: 0,
+                            biXPelsPerMeter: 0,
+                            biYPelsPerMeter: 0,
+                            biClrUsed: 0,
+                            biClrImportant: 0,
+                        },
+                        bmiColors: [windows::Win32::Graphics::Gdi::RGBQUAD::default(); 1],
+                    };
+                    
+                    let mut buffer: Vec<u8> = vec![0; 256 * 256 * 4];
+                    
+                    GetDIBits(
+                        dc,
+                        hbitmap,
+                        0,
+                        256,
+                        Some(buffer.as_mut_ptr() as *mut _),
+                        &mut bmp_info,
+                        DIB_RGB_COLORS,
+                    );
+                    
+                    windows::Win32::Graphics::Gdi::ReleaseDC(windows::Win32::Foundation::HWND(std::ptr::null_mut()), dc);
+                    let _ = windows::Win32::Graphics::Gdi::DeleteObject(hbitmap);
+                    
+                    // Convert BGRA to RGBA and create PNG
+                    let mut rgba_buffer = Vec::with_capacity(256 * 256 * 4);
+                    for chunk in buffer.chunks_exact(4) {
+                        rgba_buffer.push(chunk[2]); // R
+                        rgba_buffer.push(chunk[1]); // G
+                        rgba_buffer.push(chunk[0]); // B
+                        rgba_buffer.push(chunk[3]); // A
+                    }
+                    
+                    // Encode as PNG
+                    let mut png_data = Vec::new();
+                    {
+                        let mut encoder = png::Encoder::new(&mut png_data, 256, 256);
+                        encoder.set_color(png::ColorType::Rgba);
+                        encoder.set_depth(png::BitDepth::Eight);
+                        let mut writer = encoder.write_header()
+                            .map_err(|e| format!("PNG header error: {e}"))?;
+                        writer.write_image_data(&rgba_buffer)
+                            .map_err(|e| format!("PNG write error: {e}"))?;
+                    }
+                    
+                    // Convert to base64
+                    let b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &png_data);
+                    Ok(format!("data:image/png;base64,{}", b64))
+                })();
+                
+                CoUninitialize();
+                
+                if let Ok(icon_data) = icon_result {
+                    cache_lock.insert(path.clone(), icon_data.clone());
+                    result.insert(path, icon_data);
+                }
+            }
         }
         
         Ok(result)

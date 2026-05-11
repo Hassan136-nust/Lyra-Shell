@@ -20,6 +20,8 @@ serde_json = "1"
 sysinfo = "0.32"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 tokio = { version = "1.52.3", features = ["rt", "rt-multi-thread"] }
+png = "0.17"
+base64 = "0.22"
 
 [dependencies.windows]
 version = "0.58"
@@ -37,6 +39,7 @@ features = [
     "Win32_Media_Audio",
     "Win32_Media_Audio_Endpoints",
     "Win32_Security",
+    "Win32_Graphics_Gdi",
     "Foundation",
     "Security_Credentials_UI",
 ]

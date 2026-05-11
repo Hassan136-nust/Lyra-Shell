@@ -4,6 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { useAppContext } from '../contexts/AppContext';
 
 /* ── SVG Icon Generator ───────────────────────────────────────── */
+// Generate high-quality SVG icons at 256x256 for crisp display like Seelen UI
 const createSvgIcon = (svg) => `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 
 /* ── App icon mapping by process name ─────────────────────────── */
@@ -126,12 +127,31 @@ function getAppVisual(processName) {
   };
 }
 
-/* ── Pinned apps config ───────────────────────────────────────── */
+/* ── Pinned apps config with real executable paths ───────────────── */
+// Real Windows executable paths for icon extraction via IShellItemImageFactory
 const pinnedApps = [
-  { name: 'Files', action: 'open_explorer', ...processIconMap['explorer.exe'] },
-  { name: 'Terminal', action: 'open_terminal', ...processIconMap['WindowsTerminal.exe'] },
-  { name: 'Browser', action: 'open_browser', ...processIconMap['msedge.exe'] },
-  { name: 'Settings', action: 'open_settings', ...processIconMap['SystemSettings.exe'] },
+  { 
+    name: 'Files', 
+    action: 'open_explorer',
+    exePath: 'C:\\Windows\\explorer.exe'
+  },
+  { 
+    name: 'Terminal', 
+    action: 'open_terminal',
+    exePath: 'C:\\Program Files\\WindowsApps\\Microsoft.WindowsTerminal_1.18.3181.0_x64__8wekyb3d8bbwe\\wt.exe',
+    fallbackPath: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+  },
+  { 
+    name: 'Browser', 
+    action: 'open_browser',
+    exePath: 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+    fallbackPath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
+  },
+  { 
+    name: 'Settings', 
+    action: 'open_settings',
+    exePath: 'C:\\Windows\\ImmersiveControlPanel\\SystemSettings.exe'
+  },
 ];
 
 /* ── Single Dock Icon with magnification ──────────────────────── */
@@ -253,16 +273,23 @@ const Dock = () => {
     setContextMenu({ x: e.clientX, y: e.clientY, app });
   }, []);
 
-  // Batch icon fetching with debouncing
+  // Batch icon fetching with debouncing - include pinned app paths
   useEffect(() => {
     let disposed = false;
-    const candidates = Array.from(
-      new Set(
-        runningApps
-          .map((app) => app?.process_path)
-          .filter((path) => typeof path === 'string' && path.trim().length > 0),
-      ),
-    );
+    
+    // Collect all paths: running apps + pinned apps
+    const runningPaths = runningApps
+      .map((app) => app?.process_path)
+      .filter((path) => typeof path === 'string' && path.trim().length > 0);
+    
+    // Add pinned app paths (with fallbacks)
+    const pinnedPaths = pinnedApps.flatMap(app => {
+      const paths = [app.exePath];
+      if (app.fallbackPath) paths.push(app.fallbackPath);
+      return paths;
+    });
+    
+    const candidates = Array.from(new Set([...runningPaths, ...pinnedPaths]));
 
     // Only batch request what we actually don't have yet
     const needed = candidates.filter((path) => !realIcons[path] && !iconRequestsRef.current.has(path));
@@ -350,8 +377,9 @@ const Dock = () => {
                         ? browserApp
                         : settingsApp;
 
-                const liveIcon = match?.process_path ? realIcons[match.process_path] : null;
-                const visual = liveIcon ? { ...app, svg: liveIcon } : app;
+                // Always use real icon from Windows if available
+                const realIcon = match?.process_path ? realIcons[match.process_path] : null;
+                const visual = realIcon ? { svg: realIcon } : getAppVisual(app.name);
 
                 return (
                   <DockIcon
@@ -373,11 +401,10 @@ const Dock = () => {
               {uniqueRunning.map((app) => {
                 const processName = app.process_name || '';
                 const fallbackVisual = getAppVisual(processName);
-                const hasHardcodedSvg = !!processIconMap[processName];
+                
+                // Always prefer real Windows icon from IShellItemImageFactory
                 const realIcon = app.process_path ? realIcons[app.process_path] : null;
-
-                // CRITICAL: Prioritize High-Res hardcoded SVGs over blurry RealIcons!
-                const visual = hasHardcodedSvg ? fallbackVisual : (realIcon ? { ...fallbackVisual, svg: realIcon } : fallbackVisual);
+                const visual = realIcon ? { svg: realIcon } : fallbackVisual;
 
                 const isActive = activeWindow?.pid === app.pid;
                 const displayName = app.title?.length > 30 ? app.title.slice(0, 30) + '…' : app.title;

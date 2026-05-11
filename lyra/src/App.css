@@ -998,16 +998,16 @@
   align-items: center;
   cursor: pointer;
   flex-shrink: 0;
-  width: 36px;
-  height: 44px;
+  width: 52px;
+  height: 60px;
   justify-content: flex-end;
 }
 
 /* The icon itself */
 .dock-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1019,16 +1019,25 @@
 }
 
 .dock-icon-img {
-  width: 32px;
-  height: 32px;
-  object-fit: cover;
-  border-radius: 10px;
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  border-radius: 12px;
   display: block;
   box-shadow:
     0 2px 8px rgba(0, 0, 0, 0.3),
     inset 0 1px 0 rgba(255, 255, 255, 0.15);
   transition: box-shadow 0.2s ease;
   overflow: hidden;
+  /* CRITICAL: High-quality icon rendering like Seelen UI */
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  image-rendering: high-quality;
+  -ms-interpolation-mode: bicubic;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .dock-icon:hover {
@@ -1077,12 +1086,20 @@
   opacity: 1;
 }
 
-/* Ensure crisp scaling for dock icons */
+/* Ensure crisp scaling for dock icons - NO BLUR like Seelen UI */
 .dock-icon-img,
 .dock-icon {
   image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
   image-rendering: high-quality;
+  -ms-interpolation-mode: bicubic;
   transform-origin: bottom center;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  will-change: transform;
+  /* Force GPU acceleration for smooth scaling */
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
 }
 
 /* Active indicator dot */
