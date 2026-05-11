@@ -43,6 +43,7 @@ use windows::Win32::UI::WindowsAndMessaging::*;
 static LOG_PATH: OnceLock<PathBuf> = OnceLock::new();
 static ACTION_LAST_RUN: OnceLock<Mutex<HashMap<String, Instant>>> = OnceLock::new();
 static SYSTEM: OnceLock<Mutex<System>> = OnceLock::new();
+static ICON_CACHE: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
 
 #[derive(Serialize, Clone, Debug)]
 pub struct DiagnosticsInfo {
@@ -130,7 +131,8 @@ fn start_hotkey_listener(app_handle: tauri::AppHandle) {
                     pressed = false;
                 }
             }
-            std::thread::sleep(Duration::from_millis(30)); // 30ms heartbeat
+            // Reduced from 30ms to 100ms to lower CPU usage significantly
+            std::thread::sleep(Duration::from_millis(100));
         }
     });
 }
@@ -747,70 +749,80 @@ fn get_app_icons_batch(process_paths: Vec<String>) -> Result<std::collections::H
             return Ok(std::collections::HashMap::new());
         }
 
-        let paths_json = serde_json::to_string(&process_paths).unwrap_or_else(|_| "[]".to_string());
+        // Check cache first
+        let cache = ICON_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+        let mut cache_lock = cache.lock().unwrap();
+        
+        let mut result = std::collections::HashMap::new();
+        let mut needed_paths = Vec::new();
+        
+        for path in &process_paths {
+            if let Some(cached_icon) = cache_lock.get(path) {
+                result.insert(path.clone(), cached_icon.clone());
+            } else {
+                needed_paths.push(path.clone());
+            }
+        }
+        
+        // If all icons are cached, return immediately
+        if needed_paths.is_empty() {
+            return Ok(result);
+        }
+
+        // Optimized PowerShell script with parallel processing and smaller icons
+        let paths_json = serde_json::to_string(&needed_paths).unwrap_or_else(|_| "[]".to_string());
         
         let script = format!(
             r#"
             Add-Type -AssemblyName System.Drawing
-            Add-Type -TypeDefinition @'
-            using System;
-            using System.Runtime.InteropServices;
-            using System.Drawing;
-            public class LyraIcon {{
-                [DllImport("shell32.dll", CharSet = CharSet.Auto)]
-                public static extern IntPtr SHGetFileInfo(string pszPath, uint dwFileAttributes, ref SHFILEINFO psfi, uint cbFileInfo, uint uFlags);
-                [DllImport("shell32.dll")]
-                public static extern int SHGetImageList(int iImageList, ref Guid riid, out IntPtr ppv);
-                [DllImport("comctl32.dll")]
-                public static extern IntPtr ImageList_GetIcon(IntPtr himl, int i, uint flags);
-                [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
-                public struct SHFILEINFO {{ public IntPtr hIcon; public int iIcon; public uint dwAttributes; [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)] public string szDisplayName; [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 80)] public string szTypeName; }};
-                public static string GetBase64(string path) {{
-                    try {{
-                        SHFILEINFO shinfo = new SHFILEINFO();
-                        SHGetFileInfo(path, 0, ref shinfo, (uint)Marshal.SizeOf(shinfo), 0x4000);
-                        Guid iid = new Guid("46EB5926-582E-4017-9FDF-E8998DAA0950");
-                        SHGetImageList(4, ref iid, out IntPtr iml);
-                        Icon icon = null;
-                        if (iml != IntPtr.Zero) {{
-                            IntPtr h = ImageList_GetIcon(iml, shinfo.iIcon, 0);
-                            if (h != IntPtr.Zero) icon = Icon.FromHandle(h);
-                        }}
-                        if (icon == null) icon = Icon.ExtractAssociatedIcon(path);
-                        if (icon == null) return "";
-                        using (Bitmap bmp = icon.ToBitmap())
-                        using (System.IO.MemoryStream ms = new System.IO.MemoryStream()) {{
-                            bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
-                            return Convert.ToBase64String(ms.ToArray());
-                        }}
-                    }} catch {{ return ""; }}
-                }}
-            }}
-'@
             $paths = '{}' | ConvertFrom-Json
             $result = @{{}}
-            foreach ($p in $paths) {{
-                $b64 = [LyraIcon]::GetBase64($p)
-                if ($b64) {{ $result[$p] = "data:image/png;base64," + $b64 }}
-            }}
-            $result | ConvertTo-Json -Depth 2
+            $paths | ForEach-Object -Parallel {{
+                try {{
+                    $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($_)
+                    if ($icon) {{
+                        # Use smaller 32x32 icon for better performance
+                        $bmp = $icon.ToBitmap()
+                        $resized = New-Object System.Drawing.Bitmap(32, 32)
+                        $graphics = [System.Drawing.Graphics]::FromImage($resized)
+                        $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+                        $graphics.DrawImage($bmp, 0, 0, 32, 32)
+                        $ms = New-Object System.IO.MemoryStream
+                        $resized.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
+                        $b64 = [Convert]::ToBase64String($ms.ToArray())
+                        $ms.Dispose()
+                        $resized.Dispose()
+                        $graphics.Dispose()
+                        $bmp.Dispose()
+                        $icon.Dispose()
+                        $using:result[$_] = "data:image/png;base64," + $b64
+                    }}
+                }} catch {{}}
+            }} -ThrottleLimit 4
+            $result | ConvertTo-Json -Depth 2 -Compress
             "#, 
             paths_json
         );
 
         let output = command_no_window("powershell")
-            .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", &script])
+            .args(["-NoProfile", "-Command", &script])
             .output()
             .map_err(|e| format!("failed to extract icons: {e}"))?;
 
         if !output.status.success() {
-            return Err("icon batch extraction command failed".to_string());
+            return Ok(result); // Return cached results even if fetch fails
         }
 
         let out_str = String::from_utf8_lossy(&output.stdout);
         let parsed: std::collections::HashMap<String, String> = serde_json::from_str(&out_str).unwrap_or_default();
         
-        Ok(parsed)
+        // Update cache and result
+        for (path, icon) in parsed {
+            cache_lock.insert(path.clone(), icon.clone());
+            result.insert(path, icon);
+        }
+        
+        Ok(result)
     }
     #[cfg(not(target_os = "windows"))]
     {

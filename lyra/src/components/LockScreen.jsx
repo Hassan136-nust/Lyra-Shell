@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
@@ -65,6 +65,7 @@ const RestartIcon = () => (
 /* ── Particle Background ──────────────────────────────────────── */
 const PARTICLE_COUNT = 50;
 
+// Memoize particle creation to avoid recreation on every render
 const createParticles = () =>
     Array.from({ length: PARTICLE_COUNT }, (_, i) => ({
         id: i,
@@ -75,6 +76,22 @@ const createParticles = () =>
         delay: Math.random() * 10,
         opacity: Math.random() * 0.4 + 0.1,
     }));
+
+// Memoized particle component to prevent unnecessary re-renders
+const Particle = memo(({ particle }) => (
+    <div
+        className="lockscreen-particle"
+        style={{
+            left: `${particle.x}%`,
+            top: `${particle.y}%`,
+            width: `${particle.size}px`,
+            height: `${particle.size}px`,
+            opacity: particle.opacity,
+            animationDuration: `${particle.duration}s`,
+            animationDelay: `${particle.delay}s`,
+        }}
+    />
+));
 
 /* ── Lock Screen Component ────────────────────────────────────── */
 const LockScreen = ({ isLocked, onUnlock, biometricAvailable }) => {
@@ -94,15 +111,19 @@ const LockScreen = ({ isLocked, onUnlock, biometricAvailable }) => {
     const { runAction } = useAppContext();
     const powerMenuRef = useRef(null);
 
-    const handleMouseMove = (e) => {
+    const handleMouseMove = useCallback((e) => {
         setMousePos({
             x: ((e.clientX / window.innerWidth) - 0.5) * 40,
             y: ((e.clientY / window.innerHeight) - 0.5) * 40,
         });
-    };
+    }, []);
+    
     const [showAuthCard, setShowAuthCard] = useState(false);
     const inputRef = useRef(null);
-    const particles = useRef(createParticles());
+    
+    // Memoize particles to avoid recreation
+    const particles = useMemo(() => createParticles(), []);
+    
     const biometricTimeoutRef = useRef(null);
     const biometricActiveRef = useRef(false);
 
@@ -345,20 +366,8 @@ const LockScreen = ({ isLocked, onUnlock, biometricAvailable }) => {
                             }}
                             transition={{ type: "spring", stiffness: 45, damping: 25 }}
                         >
-                            {particles.current.map((p) => (
-                                <div
-                                    key={p.id}
-                                    className="lockscreen-particle"
-                                    style={{
-                                        left: `${p.x}%`,
-                                        top: `${p.y}%`,
-                                        width: `${p.size}px`,
-                                        height: `${p.size}px`,
-                                        opacity: p.opacity,
-                                        animationDuration: `${p.duration}s`,
-                                        animationDelay: `${p.delay}s`,
-                                    }}
-                                />
+                            {particles.map((p) => (
+                                <Particle key={p.id} particle={p} />
                             ))}
                         </motion.div>
                         <div className="lockscreen-aurora" />

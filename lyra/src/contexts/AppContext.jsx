@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 
 const AppContext = createContext(null);
 
@@ -184,23 +184,41 @@ export const AppProvider = ({ children }) => {
     await tauriInvoke('launch_app', { path });
   }, []);
 
+  // Memoize context value to prevent unnecessary re-renders
+  const contextValue = useMemo(() => ({
+    runningApps,
+    activeWindow,
+    systemInfo,
+    activeWorkspace,
+    setActiveWorkspace,
+    focusWindow,
+    minimizeWindow,
+    closeWindow,
+    runAction,
+    launchApp,
+    isLocked,
+    lockScreen,
+    unlockScreen,
+    biometricAvailable,
+  }), [
+    runningApps,
+    activeWindow,
+    systemInfo,
+    activeWorkspace,
+    setActiveWorkspace,
+    focusWindow,
+    minimizeWindow,
+    closeWindow,
+    runAction,
+    launchApp,
+    isLocked,
+    lockScreen,
+    unlockScreen,
+    biometricAvailable,
+  ]);
+
   return (
-    <AppContext.Provider value={{
-      runningApps,
-      activeWindow,
-      systemInfo,
-      activeWorkspace,
-      setActiveWorkspace,
-      focusWindow,
-      minimizeWindow,
-      closeWindow,
-      runAction,
-      launchApp,
-      isLocked,
-      lockScreen,
-      unlockScreen,
-      biometricAvailable,
-    }}>
+    <AppContext.Provider value={contextValue}>
       {children}
     </AppContext.Provider>
   );

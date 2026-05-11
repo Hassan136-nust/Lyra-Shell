@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { motion, useSpring, useMotionValue, useTransform, AnimatePresence } from 'framer-motion';
 import { invoke } from '@tauri-apps/api/core';
 import { useAppContext } from '../contexts/AppContext';
@@ -137,12 +137,15 @@ const pinnedApps = [
 /* ── Single Dock Icon with magnification ──────────────────────── */
 const DockIcon = ({ label, visual, isRunning, isActive, onClick, onContextMenu, mouseX }) => {
   const ref = useRef(null);
+  
+  // Memoize distance transform to avoid recalculation
   const distance = useTransform(mouseX, (value) => {
     const bounds = ref.current?.getBoundingClientRect();
     if (!bounds) return 9999;
     const centerX = bounds.left + bounds.width / 2;
     return value - centerX;
   });
+  
   const scaleTransform = useTransform(distance, [-160, 0, 160], [1, 1.45, 1]);
   const yTransform = useTransform(distance, [-160, 0, 160], [0, -12, 0]);
 
@@ -207,46 +210,50 @@ const Dock = () => {
   const [isHovered, setIsHovered] = useState(false);
   const hoverTimeout = useRef(null);
 
-  const handleMouseEnter = () => {
+  const handleMouseEnter = useCallback(() => {
     clearTimeout(hoverTimeout.current);
     setIsHovered(true);
-  };
+  }, []);
 
-  const handleMouseLeave = () => {
+  const handleMouseLeave = useCallback(() => {
     hoverTimeout.current = setTimeout(() => {
       setIsHovered(false);
     }, 300);
-  };
+  }, []);
 
-  // Filter out duplicates and get unique running apps by process name
-  const uniqueRunning = [];
-  const seenProcs = new Set();
-  for (const app of runningApps) {
-    const key = app.process_name?.toLowerCase();
-    // Skip if it's a pinned app already
-    const isPinned = pinnedApps.some(p =>
-      (p.action === 'open_explorer' && key === 'explorer.exe') ||
-      (p.action === 'open_terminal' && (key === 'windowsterminal.exe' || key === 'cmd.exe')) ||
-      (p.action === 'open_browser' && (key === 'chrome.exe' || key === 'msedge.exe' || key === 'firefox.exe' || key === 'brave.exe')) ||
-      (p.action === 'open_settings' && key === 'systemsettings.exe')
-    );
-    if (!seenProcs.has(key) && !isPinned) {
-      seenProcs.add(key);
-      uniqueRunning.push(app);
+  // Memoize unique running apps to avoid recalculation on every render
+  const uniqueRunning = useMemo(() => {
+    const result = [];
+    const seenProcs = new Set();
+    for (const app of runningApps) {
+      const key = app.process_name?.toLowerCase();
+      // Skip if it's a pinned app already
+      const isPinned = pinnedApps.some(p =>
+        (p.action === 'open_explorer' && key === 'explorer.exe') ||
+        (p.action === 'open_terminal' && (key === 'windowsterminal.exe' || key === 'cmd.exe')) ||
+        (p.action === 'open_browser' && (key === 'chrome.exe' || key === 'msedge.exe' || key === 'firefox.exe' || key === 'brave.exe')) ||
+        (p.action === 'open_settings' && key === 'systemsettings.exe')
+      );
+      if (!seenProcs.has(key) && !isPinned) {
+        seenProcs.add(key);
+        result.push(app);
+      }
     }
-  }
-  uniqueRunning.sort((a, b) => {
-    const aName = (a.process_name || '').toLowerCase();
-    const bName = (b.process_name || '').toLowerCase();
-    if (aName !== bName) return aName.localeCompare(bName);
-    return (a.pid || 0) - (b.pid || 0);
-  });
+    result.sort((a, b) => {
+      const aName = (a.process_name || '').toLowerCase();
+      const bName = (b.process_name || '').toLowerCase();
+      if (aName !== bName) return aName.localeCompare(bName);
+      return (a.pid || 0) - (b.pid || 0);
+    });
+    return result;
+  }, [runningApps]);
 
-  const handleContextMenu = (e, app) => {
+  const handleContextMenu = useCallback((e, app) => {
     e.preventDefault();
     setContextMenu({ x: e.clientX, y: e.clientY, app });
-  };
+  }, []);
 
+  // Batch icon fetching with debouncing
   useEffect(() => {
     let disposed = false;
     const candidates = Array.from(
@@ -263,19 +270,23 @@ const Dock = () => {
 
     needed.forEach((p) => iconRequestsRef.current.add(p));
 
-    invoke('get_app_icons_batch', { processPaths: needed })
-      .then((results) => {
-        if (!disposed && results) {
-          setRealIcons((prev) => ({ ...prev, ...results }));
-        }
-      })
-      .catch((e) => console.error("Dock icon fetch error:", e))
-      .finally(() => {
-        needed.forEach((p) => iconRequestsRef.current.delete(p));
-      });
+    // Debounce icon fetching to reduce backend calls
+    const timeoutId = setTimeout(() => {
+      invoke('get_app_icons_batch', { processPaths: needed })
+        .then((results) => {
+          if (!disposed && results) {
+            setRealIcons((prev) => ({ ...prev, ...results }));
+          }
+        })
+        .catch((e) => console.error("Dock icon fetch error:", e))
+        .finally(() => {
+          needed.forEach((p) => iconRequestsRef.current.delete(p));
+        });
+    }, 100);
 
     return () => {
       disposed = true;
+      clearTimeout(timeoutId);
     };
   }, [runningApps, realIcons]);
 
@@ -283,14 +294,27 @@ const Dock = () => {
     clearTimeout(hoverTimeout.current);
   }, []);
 
-  const explorerApp = runningApps.find((a) => a.process_name?.toLowerCase() === 'explorer.exe');
-  const terminalApp = runningApps.find((a) =>
-    ['windowsterminal.exe', 'cmd.exe', 'powershell.exe'].includes(a.process_name?.toLowerCase()),
+  // Memoize pinned app matches
+  const explorerApp = useMemo(() => 
+    runningApps.find((a) => a.process_name?.toLowerCase() === 'explorer.exe'),
+    [runningApps]
   );
-  const browserApp = runningApps.find((a) =>
-    ['chrome.exe', 'msedge.exe', 'firefox.exe', 'brave.exe'].includes(a.process_name?.toLowerCase()),
+  const terminalApp = useMemo(() =>
+    runningApps.find((a) =>
+      ['windowsterminal.exe', 'cmd.exe', 'powershell.exe'].includes(a.process_name?.toLowerCase())
+    ),
+    [runningApps]
   );
-  const settingsApp = runningApps.find((a) => a.process_name?.toLowerCase() === 'systemsettings.exe');
+  const browserApp = useMemo(() =>
+    runningApps.find((a) =>
+      ['chrome.exe', 'msedge.exe', 'firefox.exe', 'brave.exe'].includes(a.process_name?.toLowerCase())
+    ),
+    [runningApps]
+  );
+  const settingsApp = useMemo(() =>
+    runningApps.find((a) => a.process_name?.toLowerCase() === 'systemsettings.exe'),
+    [runningApps]
+  );
 
   return (
     <>
