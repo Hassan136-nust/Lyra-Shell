@@ -789,14 +789,14 @@ fn get_app_icons_batch(process_paths: Vec<String>) -> Result<std::collections::H
                     let shell_item: IShellItemImageFactory = SHCreateItemFromParsingName(
                         PWSTR(path_wide.as_ptr() as *mut u16),
                         None,
-                    ).map_err(|e| format!("Failed to create shell item: {e}"))?;
+                    ).map_err(|e| format!("Failed to create shell item for {}: {}", path, e))?;
                     
                     // Request 256x256 icon (high quality)
                     let size = windows::Win32::Foundation::SIZE { cx: 256, cy: 256 };
                     let flags = windows::Win32::UI::Shell::SIIGBF_ICONONLY;
                     
                     let hbitmap = shell_item.GetImage(size, flags)
-                        .map_err(|e| format!("Failed to get image: {e}"))?;
+                        .map_err(|e| format!("Failed to get image for {}: {}", path, e))?;
                     
                     // Convert HBITMAP to PNG base64
                     let dc = windows::Win32::Graphics::Gdi::GetDC(windows::Win32::Foundation::HWND(std::ptr::null_mut()));
@@ -820,7 +820,7 @@ fn get_app_icons_batch(process_paths: Vec<String>) -> Result<std::collections::H
                     
                     let mut buffer: Vec<u8> = vec![0; 256 * 256 * 4];
                     
-                    GetDIBits(
+                    let lines_copied = GetDIBits(
                         dc,
                         hbitmap,
                         0,
@@ -832,6 +832,10 @@ fn get_app_icons_batch(process_paths: Vec<String>) -> Result<std::collections::H
                     
                     windows::Win32::Graphics::Gdi::ReleaseDC(windows::Win32::Foundation::HWND(std::ptr::null_mut()), dc);
                     let _ = windows::Win32::Graphics::Gdi::DeleteObject(hbitmap);
+                    
+                    if lines_copied == 0 {
+                        return Err(format!("GetDIBits failed for {}", path));
+                    }
                     
                     // Convert BGRA to RGBA and create PNG
                     let mut rgba_buffer = Vec::with_capacity(256 * 256 * 4);
@@ -849,9 +853,9 @@ fn get_app_icons_batch(process_paths: Vec<String>) -> Result<std::collections::H
                         encoder.set_color(png::ColorType::Rgba);
                         encoder.set_depth(png::BitDepth::Eight);
                         let mut writer = encoder.write_header()
-                            .map_err(|e| format!("PNG header error: {e}"))?;
+                            .map_err(|e| format!("PNG header error for {}: {}", path, e))?;
                         writer.write_image_data(&rgba_buffer)
-                            .map_err(|e| format!("PNG write error: {e}"))?;
+                            .map_err(|e| format!("PNG write error for {}: {}", path, e))?;
                     }
                     
                     // Convert to base64
@@ -861,14 +865,75 @@ fn get_app_icons_batch(process_paths: Vec<String>) -> Result<std::collections::H
                 
                 CoUninitialize();
                 
-                if let Ok(icon_data) = icon_result {
-                    cache_lock.insert(path.clone(), icon_data.clone());
-                    result.insert(path, icon_data);
+                match icon_result {
+                    Ok(icon_data) => {
+                        append_diag_log("INFO", format!("Icon extracted successfully: {}", path));
+                        cache_lock.insert(path.clone(), icon_data.clone());
+                        result.insert(path, icon_data);
+                    }
+                    Err(e) => {
+                        append_diag_log("WARN", format!("Icon extraction failed for {}: {}", path, e));
+                    }
                 }
             }
         }
         
         Ok(result)
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Ok(std::collections::HashMap::new())
+    }
+}
+
+#[tauri::command]
+fn get_system_app_paths() -> Result<std::collections::HashMap<String, String>, String> {
+    #[cfg(target_os = "windows")]
+    {
+        let mut paths = std::collections::HashMap::new();
+        
+        // Explorer - always at this location
+        paths.insert("explorer".to_string(), "C:\\Windows\\explorer.exe".to_string());
+        
+        // Settings - Windows 10/11 location
+        let settings_path = "C:\\Windows\\ImmersiveControlPanel\\SystemSettings.exe";
+        if std::path::Path::new(settings_path).exists() {
+            paths.insert("settings".to_string(), settings_path.to_string());
+        }
+        
+        // Terminal - try to find Windows Terminal
+        let terminal_paths = vec![
+            std::env::var("LOCALAPPDATA").ok().map(|p| format!("{}\\Microsoft\\WindowsApps\\wt.exe", p)),
+            Some("C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe".to_string()),
+        ];
+        
+        for path_opt in terminal_paths {
+            if let Some(path) = path_opt {
+                if std::path::Path::new(&path).exists() {
+                    paths.insert("terminal".to_string(), path);
+                    break;
+                }
+            }
+        }
+        
+        // Browser - try Edge, then Chrome, then Firefox
+        let browser_paths = vec![
+            "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+            "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
+            "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+            "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+            "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+            "C:\\Program Files (x86)\\Mozilla Firefox\\firefox.exe",
+        ];
+        
+        for path in browser_paths {
+            if std::path::Path::new(path).exists() {
+                paths.insert("browser".to_string(), path.to_string());
+                break;
+            }
+        }
+        
+        Ok(paths)
     }
     #[cfg(not(target_os = "windows"))]
     {
@@ -1630,6 +1695,7 @@ pub fn run() {
             get_system_info,
             launch_app,
             get_app_icons_batch,
+            get_system_app_paths,
             list_wifi_networks,
             connect_wifi,
             connect_wifi_with_password,

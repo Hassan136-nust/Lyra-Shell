@@ -127,31 +127,13 @@ function getAppVisual(processName) {
   };
 }
 
-/* ── Pinned apps config with real executable paths ───────────────── */
-// Real Windows executable paths for icon extraction via IShellItemImageFactory
+/* ── Pinned apps config ───────────────────────────────────────── */
+// Paths will be fetched dynamically from system
 const pinnedApps = [
-  { 
-    name: 'Files', 
-    action: 'open_explorer',
-    exePath: 'C:\\Windows\\explorer.exe'
-  },
-  { 
-    name: 'Terminal', 
-    action: 'open_terminal',
-    exePath: 'C:\\Program Files\\WindowsApps\\Microsoft.WindowsTerminal_1.18.3181.0_x64__8wekyb3d8bbwe\\wt.exe',
-    fallbackPath: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
-  },
-  { 
-    name: 'Browser', 
-    action: 'open_browser',
-    exePath: 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-    fallbackPath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
-  },
-  { 
-    name: 'Settings', 
-    action: 'open_settings',
-    exePath: 'C:\\Windows\\ImmersiveControlPanel\\SystemSettings.exe'
-  },
+  { name: 'Files', action: 'open_explorer', key: 'explorer' },
+  { name: 'Terminal', action: 'open_terminal', key: 'terminal' },
+  { name: 'Browser', action: 'open_browser', key: 'browser' },
+  { name: 'Settings', action: 'open_settings', key: 'settings' },
 ];
 
 /* ── Single Dock Icon with magnification ──────────────────────── */
@@ -223,6 +205,7 @@ const DockIcon = ({ label, visual, isRunning, isActive, onClick, onContextMenu, 
 const Dock = () => {
   const { runningApps, activeWindow, focusWindow, closeWindow, runAction } = useAppContext();
   const [realIcons, setRealIcons] = useState({});
+  const [systemPaths, setSystemPaths] = useState({});
   const iconRequestsRef = useRef(new Set());
   const mouseX = useMotionValue(Infinity);
   const [contextMenu, setContextMenu] = useState(null);
@@ -239,6 +222,13 @@ const Dock = () => {
     hoverTimeout.current = setTimeout(() => {
       setIsHovered(false);
     }, 300);
+  }, []);
+
+  // Fetch system app paths on mount
+  useEffect(() => {
+    invoke('get_system_app_paths')
+      .then((paths) => setSystemPaths(paths))
+      .catch((e) => console.error("Failed to get system paths:", e));
   }, []);
 
   // Memoize unique running apps to avoid recalculation on every render
@@ -273,7 +263,7 @@ const Dock = () => {
     setContextMenu({ x: e.clientX, y: e.clientY, app });
   }, []);
 
-  // Batch icon fetching with debouncing - include pinned app paths
+    // Batch icon fetching with debouncing - include pinned app paths
   useEffect(() => {
     let disposed = false;
     
@@ -282,12 +272,8 @@ const Dock = () => {
       .map((app) => app?.process_path)
       .filter((path) => typeof path === 'string' && path.trim().length > 0);
     
-    // Add pinned app paths (with fallbacks)
-    const pinnedPaths = pinnedApps.flatMap(app => {
-      const paths = [app.exePath];
-      if (app.fallbackPath) paths.push(app.fallbackPath);
-      return paths;
-    });
+    // Add pinned app paths from system
+    const pinnedPaths = Object.values(systemPaths);
     
     const candidates = Array.from(new Set([...runningPaths, ...pinnedPaths]));
 
@@ -299,13 +285,19 @@ const Dock = () => {
 
     // Debounce icon fetching to reduce backend calls
     const timeoutId = setTimeout(() => {
+      console.log('[Dock] Fetching icons for', needed.length, 'paths:', needed);
       invoke('get_app_icons_batch', { processPaths: needed })
         .then((results) => {
           if (!disposed && results) {
+            console.log('[Dock] Received', Object.keys(results).length, 'icons out of', needed.length, 'requested');
+            console.log('[Dock] Icon paths received:', Object.keys(results));
+            console.log('[Dock] Failed paths:', needed.filter(p => !results[p]));
             setRealIcons((prev) => ({ ...prev, ...results }));
           }
         })
-        .catch((e) => console.error("Dock icon fetch error:", e))
+        .catch((e) => {
+          console.error("[Dock] Icon fetch error:", e);
+        })
         .finally(() => {
           needed.forEach((p) => iconRequestsRef.current.delete(p));
         });
@@ -315,7 +307,7 @@ const Dock = () => {
       disposed = true;
       clearTimeout(timeoutId);
     };
-  }, [runningApps, realIcons]);
+  }, [runningApps, realIcons, systemPaths]);
 
   useEffect(() => () => {
     clearTimeout(hoverTimeout.current);
@@ -377,8 +369,14 @@ const Dock = () => {
                         ? browserApp
                         : settingsApp;
 
-                // Always use real icon from Windows if available
-                const realIcon = match?.process_path ? realIcons[match.process_path] : null;
+                // Try to get real icon from running app first, then from system path
+                let realIcon = match?.process_path ? realIcons[match.process_path] : null;
+                
+                // If not running, use the system path for this app
+                if (!realIcon && systemPaths[app.key]) {
+                  realIcon = realIcons[systemPaths[app.key]];
+                }
+                
                 const visual = realIcon ? { svg: realIcon } : getAppVisual(app.name);
 
                 return (
@@ -400,14 +398,19 @@ const Dock = () => {
               {/* Running Apps */}
               {uniqueRunning.map((app) => {
                 const processName = app.process_name || '';
-                const fallbackVisual = getAppVisual(processName);
                 
                 // Always prefer real Windows icon from IShellItemImageFactory
                 const realIcon = app.process_path ? realIcons[app.process_path] : null;
-                const visual = realIcon ? { svg: realIcon } : fallbackVisual;
+                const visual = realIcon ? { svg: realIcon } : getAppVisual(processName);
+
+                // Debug logging
+                if (!realIcon && app.process_path) {
+                  console.log(`[Dock] No icon for ${processName} at path: ${app.process_path}`);
+                }
 
                 const isActive = activeWindow?.pid === app.pid;
                 const displayName = app.title?.length > 30 ? app.title.slice(0, 30) + '…' : app.title;
+                
                 return (
                   <DockIcon
                     key={app.hwnd}
