@@ -271,6 +271,8 @@ const TopBar = () => {
       {/* ── Right: System Tray ── */}
       <div className="topbar-section topbar-right">
 
+        <div className="tray-sep" />
+
         <RealtimeTray />
 
         <div className="tray-sep" />

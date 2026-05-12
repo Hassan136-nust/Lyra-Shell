@@ -943,7 +943,7 @@
   bottom: 0;
   left: 0;
   width: 100vw;
-  height: 140px;
+  height: 70px;
   pointer-events: none;
   z-index: 100;
 }
@@ -953,8 +953,7 @@
   bottom: 0;
   left: 0;
   width: 100%;
-  height: 12px;
-  /* Catch mouse at very bottom */
+  height: 6px;
   pointer-events: auto;
 }
 
@@ -968,7 +967,7 @@
 
 .dock-container {
   position: absolute;
-  bottom: 12px;
+  bottom: 4px;
   left: 50%;
   transform: translateX(-50%);
   pointer-events: auto;
@@ -977,17 +976,17 @@
 .dock-bar {
   display: flex;
   align-items: flex-end;
-  gap: 3px;
-  padding: 4px 8px 5px;
-  background: rgba(24, 24, 37, 0.65);
-  backdrop-filter: blur(28px) saturate(1.5);
-  -webkit-backdrop-filter: blur(28px) saturate(1.5);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 18px;
+  gap: 1px;
+  padding: 2px 4px 3px;
+  background: rgba(18, 18, 28, 0.7);
+  backdrop-filter: blur(16px) saturate(1.6);
+  -webkit-backdrop-filter: blur(16px) saturate(1.6);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
   box-shadow:
-    0 8px 40px rgba(0, 0, 0, 0.45),
-    0 2px 8px rgba(0, 0, 0, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    0 3px 16px rgba(0, 0, 0, 0.45),
+    0 1px 3px rgba(0, 0, 0, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 /* Individual icon wrapper */
@@ -998,38 +997,37 @@
   align-items: center;
   cursor: pointer;
   flex-shrink: 0;
-  width: 52px;
-  height: 60px;
+  width: 36px;
+  height: 42px;
   justify-content: flex-end;
 }
 
 /* The icon itself */
 .dock-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   box-shadow:
-    0 2px 8px rgba(0, 0, 0, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    0 1px 3px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
   transition: box-shadow 0.2s ease;
   overflow: hidden;
 }
 
 .dock-icon-img {
-  width: 48px;
-  height: 48px;
+  width: 32px;
+  height: 32px;
   object-fit: contain;
-  border-radius: 12px;
+  border-radius: 8px;
   display: block;
   box-shadow:
-    0 2px 8px rgba(0, 0, 0, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    0 1px 3px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
   transition: box-shadow 0.2s ease;
   overflow: hidden;
-  /* CRITICAL: High-quality icon rendering like Seelen UI */
   image-rendering: -webkit-optimize-contrast;
   image-rendering: crisp-edges;
   image-rendering: high-quality;
@@ -1042,18 +1040,18 @@
 
 .dock-icon:hover {
   box-shadow:
-    0 4px 16px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    0 2px 6px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 .dock-icon-img:hover {
   box-shadow:
-    0 4px 16px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    0 2px 6px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 .dock-icon-letter {
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 700;
   font-family: var(--font-sans);
   line-height: 1;
@@ -1063,30 +1061,30 @@
 /* Tooltip */
 .dock-tooltip {
   position: absolute;
-  bottom: calc(100% + 8px);
+  bottom: calc(100% + 5px);
   left: 50%;
   transform: translateX(-50%);
-  padding: 4px 10px;
-  background: rgba(17, 17, 27, 0.92);
-  backdrop-filter: blur(12px);
+  padding: 2px 7px;
+  background: rgba(17, 17, 27, 0.95);
+  backdrop-filter: blur(10px);
   color: var(--ctp-text);
   font-family: var(--font-sans);
-  font-size: 11px;
+  font-size: 9px;
   font-weight: 500;
   white-space: nowrap;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.15s ease;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
 }
 
 .dock-icon-wrap:hover .dock-tooltip {
   opacity: 1;
 }
 
-/* Ensure crisp scaling for dock icons - NO BLUR like Seelen UI */
+/* Ensure crisp scaling for dock icons */
 .dock-icon-img,
 .dock-icon {
   image-rendering: -webkit-optimize-contrast;
@@ -1097,35 +1095,34 @@
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
   will-change: transform;
-  /* Force GPU acceleration for smooth scaling */
   transform: translateZ(0);
   -webkit-transform: translateZ(0);
 }
 
 /* Active indicator dot */
 .dock-dot {
-  width: 4px;
-  height: 4px;
+  width: 2px;
+  height: 2px;
   border-radius: 50%;
   background: var(--ctp-subtext0);
-  margin-top: 4px;
+  margin-top: 2px;
   flex-shrink: 0;
   transition: all 0.2s ease;
 }
 
 .dock-dot-active {
   background: var(--ctp-blue);
-  box-shadow: 0 0 6px rgba(137, 180, 250, 0.5);
-  width: 5px;
-  height: 5px;
+  box-shadow: 0 0 3px rgba(137, 180, 250, 0.6);
+  width: 3px;
+  height: 3px;
 }
 
 /* Separator */
 .dock-separator {
   width: 1px;
-  height: 36px;
-  background: rgba(255, 255, 255, 0.1);
-  margin: 0 4px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.06);
+  margin: 0 2px;
   align-self: center;
   flex-shrink: 0;
 }
@@ -1648,8 +1645,343 @@
 
 .lockscreen-scanner-ring.ring-three {
   inset: 24px;
-  border-color: rgba(203, 166, 247, 0.24);
+  border-color: rgba(166, 227, 161, 0.16);
   animation-delay: 0.44s;
+}
+
+@keyframes lockscreen-scanner-ring {
+  0% { transform: scale(0.96); opacity: 1; }
+  100% { transform: scale(1.08); opacity: 0; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   MEDIA PLAYER — TopBar Media Control & Card
+   ══════════════════════════════════════════════════════════════ */
+
+.topbar-media-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: transparent;
+  border: none;
+  color: var(--ctp-blue);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar-media-indicator:hover {
+  background: rgba(137, 180, 250, 0.12);
+  border-radius: 6px;
+}
+
+.topbar-media-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.equalizer {
+  display: flex;
+  align-items: flex-end;
+  gap: 1.5px;
+  height: 10px;
+}
+
+.equalizer .bar {
+  width: 1.5px;
+  background: var(--ctp-blue);
+  border-radius: 1px;
+  animation: equalizer-bar 0.6s ease-in-out infinite;
+}
+
+.equalizer .bar:nth-child(1) {
+  height: 3px;
+  animation-delay: 0s;
+}
+
+.equalizer .bar:nth-child(2) {
+  height: 6px;
+  animation-delay: 0.1s;
+}
+
+.equalizer .bar:nth-child(3) {
+  height: 5px;
+  animation-delay: 0.2s;
+}
+
+@keyframes equalizer-bar {
+  0%, 100% { height: 2px; }
+  50% { height: 8px; }
+}
+
+.topbar-media-text {
+  font-size: 10px;
+  color: var(--ctp-subtext1);
+  font-weight: 500;
+}
+
+.media-card-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+  z-index: 250;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 40px 20px 20px;
+}
+
+.media-card {
+  background: radial-gradient(circle at top right, rgba(137, 180, 250, 0.15), transparent 40%),
+    linear-gradient(145deg, rgba(24, 24, 37, 0.95), rgba(17, 17, 27, 0.9));
+  backdrop-filter: blur(32px) saturate(1.5);
+  -webkit-backdrop-filter: blur(32px) saturate(1.5);
+  border: 1px solid rgba(205, 214, 244, 0.2);
+  border-radius: 24px;
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  width: 100%;
+  max-width: 380px;
+  padding: 24px;
+  color: var(--ctp-text);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.media-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.media-app-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.media-app-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ctp-blue);
+  text-transform: capitalize;
+}
+
+.media-card-close {
+  background: transparent;
+  border: none;
+  color: var(--ctp-subtext1);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 4px 8px;
+  transition: color 0.2s ease;
+  border-radius: 6px;
+}
+
+.media-card-close:hover {
+  color: var(--ctp-text);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.media-card-art {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.media-art-placeholder {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, rgba(137, 180, 250, 0.15), rgba(166, 227, 161, 0.08));
+  border: 1px solid rgba(137, 180, 250, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ctp-blue);
+}
+
+.equalizer-large {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 40px;
+}
+
+.equalizer-large .bar {
+  width: 3px;
+  background: linear-gradient(180deg, var(--ctp-blue), var(--ctp-cyan));
+  border-radius: 2px;
+  animation: equalizer-bar-large 0.6s ease-in-out infinite;
+}
+
+.equalizer-large .bar:nth-child(1) {
+  height: 15px;
+  animation-delay: 0s;
+}
+
+.equalizer-large .bar:nth-child(2) {
+  height: 25px;
+  animation-delay: 0.1s;
+}
+
+.equalizer-large .bar:nth-child(3) {
+  height: 20px;
+  animation-delay: 0.2s;
+}
+
+.equalizer-large .bar:nth-child(4) {
+  height: 30px;
+  animation-delay: 0.3s;
+}
+
+@keyframes equalizer-bar-large {
+  0%, 100% { height: 10px; opacity: 0.6; }
+  50% { height: 35px; opacity: 1; }
+}
+
+.media-card-info {
+  text-align: center;
+}
+
+.media-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ctp-text);
+  margin: 0 0 6px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.media-artist {
+  font-size: 12px;
+  color: var(--ctp-subtext0);
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.media-progress-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.media-progress-bar {
+  width: 100%;
+  height: 4px;
+  background: rgba(137, 180, 250, 0.15);
+  border-radius: 2px;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.media-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--ctp-blue), var(--ctp-cyan));
+  border-radius: 2px;
+  transition: width 0.1s linear;
+}
+
+.media-time {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10px;
+  color: var(--ctp-subtext0);
+  font-family: var(--font-mono);
+}
+
+.media-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.media-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(137, 180, 250, 0.2);
+  background: rgba(137, 180, 250, 0.08);
+  color: var(--ctp-blue);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  font-size: 14px;
+}
+
+.media-btn:hover:not(:disabled) {
+  background: rgba(137, 180, 250, 0.18);
+  border-color: rgba(137, 180, 250, 0.3);
+  transform: translateY(-2px);
+}
+
+.media-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.media-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.media-btn-play {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(137, 180, 250, 0.15), rgba(166, 227, 161, 0.1));
+  border-color: rgba(137, 180, 250, 0.25);
+  font-size: 18px;
+}
+
+.media-btn-play:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(137, 180, 250, 0.25), rgba(166, 227, 161, 0.15));
+}
+
+.media-status {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.status-badge {
+  font-size: 11px;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-playing {
+  background: rgba(166, 227, 161, 0.18);
+  color: var(--ctp-green);
+  border: 1px solid rgba(166, 227, 161, 0.3);
+}
+
+.status-paused {
+  background: rgba(186, 194, 222, 0.12);
+  color: var(--ctp-subtext0);
+  border: 1px solid rgba(186, 194, 222, 0.2);
 }
 
 @keyframes lockscreen-scanner-ring {
